@@ -7,7 +7,7 @@
     <body>
         <h3>图形（面积&&周长）计算器</h3>
 
-        <a href="index.php?action=circle">圆形</a>||
+        <a href="index.php?action=circle">圆形</a>
         <hr>
         <?php
             spl_autoload_register(function($className) {
