@@ -1,0 +1,28 @@
+<form method="post" action="<? php echo htmlspecialchars($_SERVER['PHP_SELF']);?>">
+	<table style="border: 1px solid red">
+		<tr>
+			<td>用户名</td>
+			<td><input type="text" name="username" id="username"></td>
+		</tr>
+		<tr>
+			<td>密码</td>
+			<td><input type="password" name="password1" id="password1" value=""/></td>
+		</tr>
+		<tr>
+			<td>确认</td>
+			<td><input type="password" name="password2" id="password2" value=""></td>
+		</tr>
+		<tr>
+			<td>邮箱地址</td>
+			<td><input type="email" name="email" id="email" value=""></td>
+		</tr>
+		<tr>
+			<td>验证</td>
+			<td><img src="captcha.php" alt=""/><br>
+		<input type="text" name="captcha" id="captcha"/></td>
+		</tr>
+		<tr>
+			<td colspan="2"><input type="submit" name="submit" value="注册"></td>
+		</tr>
+	</table>
+</form>
