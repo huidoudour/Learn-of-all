@@ -13,7 +13,7 @@
                 'user' => 'root',
                 'pass' => '',
                 'dbname' => 'jsei_msg');
-            $this->db= MYSQLPDO::getInstance($dbConfig);
+            $this->db= MySQLPDO::getInstance($dbConfig);
     
         }
     }    
