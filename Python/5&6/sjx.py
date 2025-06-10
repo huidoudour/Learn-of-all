@@ -16,5 +16,5 @@ turtle.fd(length)
 
 # os.system("pause")
 
-time.sleep(2)
+time.sleep(1)
 turtle.bye()
