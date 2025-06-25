@@ -2,30 +2,38 @@ name: Scheduled Release
 
 on:
   schedule:
-    - cron: '0 4 */7 * *' # 每7天的北京时间12点（UTC 4点）运行
+    - cron: '0 4 */7 * *'  # 每7天 UTC 4点（北京时间12点）运行
   workflow_dispatch:
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      DATETIME: ""  # 显式声明变量（避免VSCode警告）
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Build project
-      run: |
-        zip -r auto-pack.zip . -x "*.git*"
+      - name: Build project
+        run: |
+          zip -r auto-pack.zip . -x "*.git*"
 
-    - name: Get current date
-      run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      - name: Get current datetime
+        id: datetime-step
+        run: |
+          # 格式：YYYY-MM-DD_HH-MM-SS （24小时制，UTC时间）
+          echo "DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+          echo "DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_OUTPUT
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "auto-release-${{ env.DATE }}"
-        name: "auto-pack-${{ env.DATE }}"
-        body: "此 Release 由 GitHub Actions 定期自动生成。"
-        files: auto-pack.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "auto-release-${{ env.DATETIME }}"
+          name: "auto-pack-${{ env.DATETIME }}"
+          body: |
+            此 Release 由 GitHub Actions 自动生成。
+            精确时间：${{ env.DATETIME }} (UTC)
+          files: auto-pack.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
