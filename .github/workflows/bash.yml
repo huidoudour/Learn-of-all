@@ -23,8 +23,8 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "auto-release-${{ env.DATE }}"
-        name: 自动定期打包 ${{ env.DATE }}
+        tag_name: "auto-release-${{ env }}"
+        name: 自动定期打包 ${{ env }}
         body: "此 Release 由 GitHub Actions 定期自动生成。"
         files: build-artifact.zip
       env:
