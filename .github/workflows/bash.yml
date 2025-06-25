@@ -13,9 +13,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Build project (打包脚本，请根据需要自定义)
+    - name: Build project
       run: |
-        zip -r build-artifact.zip . -x "*.git*"
+        zip -r auto-pack.zip . -x "*.git*"
 
     - name: Get current date
       run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
@@ -23,9 +23,9 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "auto-release-${{ env }}"
-        name: 自动定期打包 ${{ env }}
+        tag_name: "auto-release-${{ env.DATE }}"
+        name: "auto-pack-${{ env.DATE }}"
         body: "此 Release 由 GitHub Actions 定期自动生成。"
-        files: build-artifact.zip
+        files: auto-pack.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
