@@ -1,0 +1,31 @@
+name: Scheduled Release
+
+on:
+  schedule:
+    - cron: '0 4 */7 * *' # 每7天的北京时间12点（UTC 4点）运行
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build project (打包脚本，请根据需要自定义)
+      run: |
+        zip -r build-artifact.zip . -x "*.git*"
+
+    - name: Get current date
+      run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "auto-release-${{ env.DATE }}"
+        name: 自动定期打包 ${{ env.DATE }}
+        body: "此 Release 由 GitHub Actions 定期自动生成。"
+        files: build-artifact.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
