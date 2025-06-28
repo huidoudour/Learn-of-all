@@ -1,0 +1,36 @@
+name: Manual Pre-release
+
+on:
+  workflow_dispatch:  # 仅允许手动触发
+
+jobs:
+  build-and-pre-release:
+    runs-on: ubuntu-latest
+    env:
+      DATETIME: ""  # 显式声明变量（避免VSCode警告）
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build project (打包脚本，请根据需要自定义)
+      run: |
+        zip -r pre-manual.zip . -x "*.git*"
+
+    - name: Get current datetime
+      id: datetime
+      run: |
+          # 格式：YYYY-MM-DD_HH-MM-SS （24小时制，UTC时间）
+          echo "DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+          echo "DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_OUTPUT
+
+    - name: Create Pre-release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "manual-pre-release-${{ env.DATETIME }}"
+        name: "手动Pre-release ${{ env.DATETIME }}"
+        body: "此 Pre-release 由 ${GITHUB_ACTOR} 手动触发并自动生成。"
+        files: pre-manual.zip
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
