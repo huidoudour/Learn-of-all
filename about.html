@@ -1,23 +1,75 @@
+<!-- about.html -->
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>About</title>
-        <meta charset="UTF-8"></meta>
-        <link rel="stylesheet" type="text/css" href="style.css"></link>
-    </head>
-    <body>
-        <div id="header">
-            <div id="logo">
-                <a href="index.html">Huidou</a>
-            </div>
-            <div id="menu">
-                <a href="index.html">Home</a>
-                <a href="#">亻尔女子</a>
-                <a href="contact.html">Contact</a>
-            </div>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huidou - About</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-animation"></div>
+    
+    <div id="header" class="glass-nav">
+        <div id="logo">
+            <a href="index.html" class="logo-link">Huidou</a>
         </div>
-        <div id="content">
+        <div id="menu">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="#" class="nav-link active">亻尔女子</a>
+            <a href="contact.html" class="nav-link">Contact</a>
         </div>
+    </div>
 
-    </body>
+    <div id="content" class="main-content">
+        <div class="about-section">
+            <div class="about-header">
+                <h1>关于<span>我</span></h1>
+                <div class="decoration-line"></div>
+            </div>
+            
+            <div class="about-content">
+                <div class="about-content">
+                <div class="github-card-container">
+                    <a href="https://github.com/huidoudour/Learn-of-all" target="_blank" rel="noopener noreferrer">
+                    <picture>
+                        <source 
+                            media="(prefers-color-scheme: dark)" 
+                            srcset="https://github-readme-stats.vercel.app/api/pin/?username=huidoudour&repo=Learn-of-all&hide_border=true&bg_color=0D1117&title_color=90CAF9&text_color=64B5F6&icon_color=CE93D8&cache_seconds=1" />
+                        <source 
+                            media="(prefers-color-scheme: light)" 
+                            srcset="https://github-readme-stats.vercel.app/api/pin/?username=huidoudour&repo=Learn-of-all&hide_border=true&bg_color=E3F2FD&title_color=0D47A1&text_color=1565C0&icon_color=8E24AA&cache_seconds=1" />
+                        <img 
+                            src="https://github-readme-stats.vercel.app/api/pin/?username=huidoudour&repo=Learn-of-all&hide_border=true&bg_color=E3F2FD&title_color=0D47A1&text_color=1565C0&icon_color=8E24AA&cache_seconds=1"
+                            alt="Learn-of-all"
+                            class="github-card" />
+                        </picture>
+                    </a>
+                </div>
+                <div class="about-text">
+                    <h2>话语</h2>
+                    <p>一切美好皆岁月</p>
+                    <p>你保护世界，我保护你</p>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <p class="copyright">© 2023 Huidou. All rights reserved.</p>
+            <div class="github-footer">
+                <a href="https://github.com/huidoudour" target="_blank" rel="noopener noreferrer">
+                    Powered by <span class="github-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                    </span> GitHub
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
 </html>
