@@ -3,7 +3,7 @@ package com.zms.framework.util;
 /**
  * @version v1.0
  * @ClassName: StringUtils
- * @Description: TODO
+ * @Description: 字符串工具类
  * @Author: zms
  */
 public class StringUtils {
