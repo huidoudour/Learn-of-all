@@ -1,23 +1,83 @@
+<!-- contact.html -->
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>Contact</title>
-        <meta charset="UTF-8"></meta>
-        <link rel="stylesheet" type="text/css" href="style.css"></link>
-    </head>
-    <body>
-        <div id="header">
-            <div id="logo">
-                <a href="index.html">Huidou</a>
-            </div>
-            <div id="menu">
-                <a href="index.html">Home</a>
-                <a href="about.html">About</a>
-                <a href="#">huidoudour@outlook.com</a>
-            </div>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huidou - Contact</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-animation"></div>
+    
+    <div id="header" class="glass-nav">
+        <div id="logo">
+            <a href="index.html" class="logo-link">Huidou</a>
         </div>
-        <div id="content">
+        <div id="menu">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link">About</a>
+            <a href="#" class="nav-link active">@huidoudour</a>
         </div>
+    </div>
 
-    </body>
+    <div id="content" class="main-content">
+        <div class="contact-section">
+            <div class="contact-header">
+                <h1>联系<span>我</span></h1>
+                <p>乐于听取意见</p>
+                <div class="decoration-line"></div>
+            </div>
+            
+            <div class="contact-container">
+                <div class="contact-info">
+                    <h2>Contact Information</h2>
+                    <div class="info-item">
+                        <div class="info-icon">✉️</div>
+                        <a href="mailto:huidoudour@outlook.com">huidoudour@outlook.com</a>
+                    </div>
+                    
+                    <h2>常联系</h2>
+                    <div class="social-links">
+                        <a href="#" class="social-button">Coolapk</a>
+                        <a href="#" class="social-button">GitHub</a>
+                        <a href="#" class="social-button">Email</a>
+                    </div>
+                </div>
+                
+                <div class="contact-form">
+                    <h2>Send Us a Message</h2>
+                    <form>
+                        <div class="form-group">
+                            <input type="text" placeholder="Your Name" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="email" placeholder="Your Email" required>
+                        </div>
+                        <div class="form-group">
+                            <textarea placeholder="Your Message" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">发送信件</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <p class="copyright">© 2025 Huidou. All rights reserved.</p>
+            <div class="github-footer">
+                <a href="https://github.com/huidoudour" target="_blank" rel="noopener noreferrer">
+                    Powered by <span class="github-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                    </span> GitHub
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
 </html>
