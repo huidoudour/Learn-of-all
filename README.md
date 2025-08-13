@@ -3,19 +3,46 @@
 ## C_Data
 
 ```C
-#仅用于学习目的
+# 仅用于学习目的
+#include <stdio.h>;
+int main () {
+  printf("Hello World!");
+  return 0;
+}
 ```
 
 ## PHP
 
 ```php
-#仅用于学习目的
+// 仅用于学习目的
+<?php
+  echo "Hello World!";
+?>
 ```
 
 ## Python
 
 ```python
-#仅用于学习目的
+# 仅用于学习目的
+print("Hello World!")
+```
+
+## HTML
+
+```html
+<!-- 仅用于学习目的 -->
+ <html>
+  <body>
+    <h1>Hello World!</h1>
+  </body>
+  </html>
+```
+
+## Bash
+
+```bash
+# 仅用于学习目的
+echo "Hello World!"
 ```
 
 ## Contributors

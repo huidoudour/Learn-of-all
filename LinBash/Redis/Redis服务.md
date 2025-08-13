@@ -90,7 +90,12 @@ sudo systemctl status redis_8006
 或者使用 `redis-cli` 连接到某个实例并检查其状态：
 
 ```bash
-redis-cli -p 8001 ping
+redis-cli -h <服务器IP> -p <端口> ping
+```
+
+```bash
+#批量测试
+for i in {1..6};do redis-cli -p 800$i -h <服务器IP> ping;done
 ```
 
 如果返回 `PONG`，则说明该实例正在运行。
