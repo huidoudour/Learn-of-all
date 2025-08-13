@@ -18,6 +18,18 @@
 #仅用于学习目的
 ```
 
+## HTML
+
+```html
+#仅用于学习目的
+```
+
+## Bash
+
+```bash
+#仅用于学习目的
+```
+
 ## Contributors
 
 感谢大家为 Learn-of-all 做出的宝贵贡献！如果你也希望为 Learn-of-all 做出贡献，请提交一个 pull request。
