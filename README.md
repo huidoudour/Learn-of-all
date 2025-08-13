@@ -3,12 +3,22 @@
 ## C_Data
 
 ```C
-# 仅用于学习目的
+// 仅用于学习目的
 #include <stdio.h>;
 int main () {
   printf("Hello World!");
   return 0;
 }
+```
+
+## Java
+
+```java
+// 仅用于学习目的
+public class HelloWorld {}
+  public static void main(String[] args) {
+    system.out.println("Hello World!");
+  }
 ```
 
 ## PHP
@@ -64,3 +74,8 @@ echo "Hello World!"
  </picture>
 
 </a>
+
+#### 联系我
+> 若有任何侵权的地方，请联系我。
+
+>Readme代码片段仅仅为了好看
