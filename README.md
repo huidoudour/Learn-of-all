@@ -3,7 +3,7 @@
 ## C_Data
 
 ```C
-仅用于学习目的
+# 仅用于学习目的
 #include <stdio.h>;
 int main () {
   printf("Hello World!");
