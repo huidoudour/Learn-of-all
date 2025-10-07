@@ -1,8 +1,10 @@
 name: Scheduled Release
 
 on:
-  schedule:
-    - cron: '0 4 */7 * *'  # 每7天 UTC 4点（北京时间12点）运行
+  push:
+    branches: [ "master" ] #监控的分支
+  pull_request:
+    branches: [ "master" ] #监控的分支
   workflow_dispatch:
 
 jobs:
