@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地时区与系统时间显示器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        header {
+            background: #5c6bc0;
+            color: white;
+            text-align: center;
+            padding: 25px 20px;
+        }
+        
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .time-display {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            padding: 30px 20px;
+        }
+        
+        .time-card {
+            flex: 1;
+            min-width: 300px;
+            margin: 15px;
+            padding: 25px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .time-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-title {
+            font-size: 1.4rem;
+            color: #5c6bc0;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .time {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #333;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .date {
+            font-size: 1.4rem;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        .timezone {
+            font-size: 1.2rem;
+            color: #888;
+            padding: 8px 15px;
+            background: #f5f5f5;
+            border-radius: 30px;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        
+        .details {
+            padding: 20px;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 1rem;
+            color: #666;
+        }
+        
+        .auto-update {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+            margin: 0 15px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 30px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #5c6bc0;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+        
+        @media (max-width: 768px) {
+            .time {
+                font-size: 2.8rem;
+            }
+            
+            .time-card {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>本地时区与系统时间显示器</h1>
+            <p class="subtitle">实时显示您的本地时区时间和当前系统时间 (UTC+8)</p>
+        </header>
+        
+        <div class="time-display">
+            <div class="time-card">
+                <h2 class="card-title">本地时区时间</h2>
+                <div class="time" id="local-time">00:00:00</div>
+                <div class="date" id="local-date">0000年00月00日 星期0</div>
+                <div class="timezone" id="local-timezone">时区：UTC+0</div>
+            </div>
+            
+            <div class="time-card">
+                <h2 class="card-title">系统时间 (UTC+8)</h2>
+                <div class="time" id="utc8-time">00:00:00</div>
+                <div class="date" id="utc8-date">0000年00月00日</div>
+                <div class="timezone">UTC+8 时区</div>
+            </div>
+        </div>
+        
+        <div class="details">
+            <p>本页面自动检测您的本地时区并显示与UTC+8系统时间的对比</p>
+            <div class="auto-update">
+                <span>自动更新: </span>
+                <label class="switch">
+                    <input type="checkbox" id="auto-update" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const localTimeElement = document.getElementById('local-time');
+        const localDateElement = document.getElementById('local-date');
+        const localTimezoneElement = document.getElementById('local-timezone');
+        const utc8TimeElement = document.getElementById('utc8-time');
+        const utc8DateElement = document.getElementById('utc8-date');
+        const autoUpdateToggle = document.getElementById('auto-update');
+        
+        // 星期几的中文表示
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        
+        // 格式化数字（前面补0）
+        function formatNumber(num) {
+            return num < 10 ? '0' + num : num;
+        }
+        
+        // 获取UTC+8时间
+        function getUTC8Time() {
+            const now = new Date();
+            // 转换为UTC+8时间 (UTC时间 + 8小时)
+            const utc8Time = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+            return utc8Time;
+        }
+        
+        // 更新时间显示
+        function updateTime() {
+            if (!autoUpdateToggle.checked) return;
+            
+            const now = new Date();
+            const utc8 = getUTC8Time();
+            
+            // 更新本地时间
+            const localHours = formatNumber(now.getHours());
+            const localMinutes = formatNumber(now.getMinutes());
+            const localSeconds = formatNumber(now.getSeconds());
+            
+            localTimeElement.textContent = `${localHours}:${localMinutes}:${localSeconds}`;
+            
+            const localYear = now.getFullYear();
+            const localMonth = formatNumber(now.getMonth() + 1);
+            const localDay = formatNumber(now.getDate());
+            const localWeekday = weekdays[now.getDay()];
+            
+            localDateElement.textContent = `${localYear}年${localMonth}月${localDay}日 星期${localWeekday}`;
+            
+            // 更新UTC+8时间
+            const utc8Hours = formatNumber(utc8.getUTCHours());
+            const utc8Minutes = formatNumber(utc8.getUTCMinutes());
+            const utc8Seconds = formatNumber(utc8.getUTCSeconds());
+            
+            utc8TimeElement.textContent = `${utc8Hours}:${utc8Minutes}:${utc8Seconds}`;
+            
+            const utc8Year = utc8.getUTCFullYear();
+            const utc8Month = formatNumber(utc8.getUTCMonth() + 1);
+            const utc8Day = formatNumber(utc8.getUTCDate());
+            const utc8Weekday = weekdays[utc8.getUTCDay()];
+            
+            utc8DateElement.textContent = `${utc8Year}年${utc8Month}月${utc8Day}日 星期${utc8Weekday}`;
+        }
+        
+        // 初始化时区信息
+        function initTimezone() {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const offset = -new Date().getTimezoneOffset() / 60;
+            const offsetSign = offset >= 0 ? '+' : '-';
+            const offsetText = `UTC${offsetSign}${Math.abs(offset)}`;
+            
+            localTimezoneElement.textContent = `时区：${timezone} (${offsetText})`;
+        }
+        
+        // 初始化
+        function init() {
+            initTimezone();
+            updateTime();
+            // 每秒更新一次时间
+            setInterval(updateTime, 1000);
+        }
+        
+        // 页面加载时初始化
+        window.onload = init;
+    </script>
+</body>
+</html>
