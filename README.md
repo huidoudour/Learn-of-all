@@ -63,17 +63,7 @@ echo "Hello World!"
   <img src="https://contrib.rocks/image?repo=huidoudour/Learn-of-all" />
 </a>
 
-## 历史星标
-
-<a href="https://www.star-history.com/#huidoudour/Learn-of-all&Date">
-
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=huidoudour/Learn-of-all&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=huidoudour/Learn-of-all&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=huidoudour/Learn-of-all&type=Date" />
- </picture>
-
-</a>
+[![Star History](https://img.shields.io/badge/Star-History-blue.svg)](StarHistory.md)
 
 #### 联系我
 > 若有任何侵权的地方，请联系我。
