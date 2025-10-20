@@ -1,10 +1,10 @@
 name: Scheduled Release
 
 on:
-  push:
-    branches: [ "master" ] #监控的分支
-  pull_request:
-    branches: [ "master" ] #监控的分支
+#  push:
+#    branches: [ "master" ] #监控的分支
+#  pull_request:
+#    branches: [ "master" ] #监控的分支
   workflow_dispatch:
 
 jobs:
