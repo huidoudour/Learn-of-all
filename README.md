@@ -4,55 +4,36 @@
 
 ```C
 // 仅用于学习目的
-#include <stdio.h>;
-int main () {
-  printf("Hello World!");
-  return 0;
-}
 ```
 
 ## Java
 
 ```java
 // 仅用于学习目的
-public class HelloWorld {}
-  public static void main(String[] args) {
-    system.out.println("Hello World!");
-  }
 ```
 
 ## PHP
 
 ```php
 // 仅用于学习目的
-<?php
-  echo "Hello World!";
-?>
 ```
 
 ## Python
 
 ```python
 # 仅用于学习目的
-print("Hello World!")
 ```
 
 ## HTML
 
 ```html
 <!-- 仅用于学习目的 -->
- <html>
-  <body>
-    <h1>Hello World!</h1>
-  </body>
-  </html>
 ```
 
 ## Bash
 
 ```bash
 # 仅用于学习目的
-echo "Hello World!"
 ```
 
 ## Contributors
@@ -67,5 +48,3 @@ echo "Hello World!"
 
 #### 联系我
 > 若有任何侵权的地方，请联系我。
-
->Readme代码片段仅仅为了好看
