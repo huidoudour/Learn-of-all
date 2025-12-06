@@ -1,0 +1,4 @@
+backup_config.json
+.backup_key
+/__pycache__/
+/bak

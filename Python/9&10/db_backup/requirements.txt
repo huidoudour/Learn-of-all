@@ -1,0 +1,3 @@
+# 数据库备份工具依赖包
+pymysql>=1.0.2
+cryptography>=3.4.8
