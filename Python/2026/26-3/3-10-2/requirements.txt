@@ -1,0 +1,3 @@
+﻿Flask
+pysnmp
+ping3

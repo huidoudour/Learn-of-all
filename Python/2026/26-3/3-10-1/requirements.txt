@@ -1,0 +1,7 @@
+﻿flask==2.3.3
+pysnmp==4.4.12
+matplotlib==3.7.2
+ping3==4.0.4
+threading
+json
+time
