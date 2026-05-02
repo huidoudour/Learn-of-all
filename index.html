@@ -1,69 +1,92 @@
-<!-- index.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Huidou - Home</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css?v=20260502">
 </head>
 <body>
-    <div class="background-animation"></div>
-    
-    <div id="header" class="glass-nav">
-        <div id="logo">
-            <a href="index.html" class="logo-link">Huidou</a>
-        </div>
-        <div id="menu">
-            <a href="index.html" class="nav-link active">Home</a>
-            <a href="about.html" class="nav-link">About</a>
-            <a href="contact.html" class="nav-link">Contact</a>
-        </div>
-    </div>
-
-    <div id="content" class="main-content">
-        <div class="hero-section">
-            <h1 class="hero-title">亻尔女子哇，欢迎 来到<span class="highlight">这里</span></h1>
-            <p class="hero-subtitle">创意与想法的交汇点</p>
-            <div class="hero-buttons">
-                <a href="about.html" class="btn btn-primary">About</a>
-                <a href="contact.html" class="btn btn-secondary">Contact</a>
+    <div class="container">
+        <header>
+            <div class="avatar">
+                <img src="https://github.com/huidoudour.png" alt="Avatar" onerror="this.src='./images/avatar.png'; this.onerror=null;">
             </div>
-        </div>
+            <h1>欢迎来到<span>Huidou</span>的空间</h1>
+            <p class="subtitle">创意与想法的交汇点，探索无限可能</p>
+            <a href="https://github.com/huidoudour" target="_blank" class="github-link">
+                <i class="fab fa-github"></i> 访问 GitHub 主页
+            </a>
+        </header>
+
+        <nav class="nav-menu">
+            <a href="index.html" class="nav-item active">
+                <i class="fas fa-home"></i> 首页
+            </a>
+            <a href="about.html" class="nav-item">
+                <i class="fas fa-user"></i> 关于
+            </a>
+            <a href="contact.html" class="nav-item">
+                <i class="fas fa-envelope"></i> 联系
+            </a>
+        </nav>
+
+        <section class="intro">
+            <p>这里是我的个人空间，展示创意、思路和成果。每个项目都承载着不同的想法和技术探索，欢迎浏览和交流。</p>
+        </section>
 
         <div class="features-grid">
             <div class="feature-card">
-                <div class="feature-icon">✨</div>
+                <div class="feature-icon"><i class="fas fa-lightbulb"></i></div>
                 <h3>创意</h3>
-                <p>创意是发现事物的源泉</p>
+                <p>创意是发现事物的源泉，激发无限可能</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">🚀</div>
+                <div class="feature-icon"><i class="fas fa-rocket"></i></div>
                 <h3>思路</h3>
-                <p>思路是解决问题的可靠途径</p>
+                <p>思路是解决问题的可靠途径，指引前行方向</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">❤️</div>
+                <div class="feature-icon"><i class="fas fa-trophy"></i></div>
                 <h3>成功</h3>
-                <p>一切行动都是成功的铺垫</p>
+                <p>一切行动都是成功的铺垫，见证成长历程</p>
             </div>
         </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">创意想法</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">2026</div>
+                <div class="stat-label">持续更新</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">开放</div>
+                <div class="stat-label">交流分享</div>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2026 Huidou | 用心创造，用爱分享</p>
+            <p>最后更新日期: <span id="currentDate"></span></p>
+        </footer>
     </div>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <p class="copyright">© 2026 Huidou. All rights reserved.</p>
-            <div class="github-footer">
-                <a href="https://github.com/huidoudour" target="_blank" rel="noopener noreferrer">
-                    Powered by <span class="github-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-                        </svg>
-                    </span> GitHub
-                </a>
-            </div>
-        </div>
-    </footer>
+    <script>
+        // 显示当前日期
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long'
+        });
+    </script>
 </body>
 </html>
