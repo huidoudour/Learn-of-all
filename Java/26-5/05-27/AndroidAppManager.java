@@ -6,6 +6,8 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -16,24 +18,24 @@ import java.util.Map;
 /**
  * Android应用管理工具
  * 通过ADB管理Android设备和AVD上的应用
+ * 采用双栏布局展示多用户应用（类似Android桌面启动器抽屉模式）
  * 
  * @author huidoudour
- * @version 1.0
+ * @version 2.0
  */
 public class AndroidAppManager extends JFrame {
     
     // UI组件
     private JComboBox<String> deviceComboBox;
-    private JTable appTable;
-    private DefaultTableModel tableModel;
+    private JTable user0Table;      // 用户0（主用户）应用表 - 左栏
+    private JTable otherUserTable;  // 其他用户应用表 - 右栏
+    private DefaultTableModel user0Model;
+    private DefaultTableModel otherUserModel;
     private JButton refreshButton;
-    private JButton uninstallButton;
-    private JButton clearDataButton;
-    private JButton clearCacheButton;
     private JLabel statusLabel;
     
     // 数据存储
-    private List<AppInfo> appList;
+    private List<AppInfo> allApps;
     private Map<Integer, List<AppInfo>> userAppsMap; // 用户ID -> 应用列表
     
     /**
@@ -52,7 +54,7 @@ public class AndroidAppManager extends JFrame {
         
         @Override
         public String toString() {
-            return packageName + (isHuidoudour ? " [⭐huidoudour]" : "");
+            return packageName + (isHuidoudour ? " ⭐" : "");
         }
     }
     
@@ -65,8 +67,8 @@ public class AndroidAppManager extends JFrame {
      * 初始化UI界面
      */
     private void initializeUI() {
-        setTitle("Android应用管理工具");
-        setSize(900, 600);
+        setTitle("Android应用管理工具 - 双用户视图");
+        setSize(1400, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
@@ -78,23 +80,19 @@ public class AndroidAppManager extends JFrame {
         JPanel topPanel = createTopPanel();
         mainPanel.add(topPanel, BorderLayout.NORTH);
         
-        // 中间表格面板
-        JPanel centerPanel = createCenterPanel();
+        // 中间双栏面板（左右分栏）
+        JPanel centerPanel = createDualColumnPanel();
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         
-        // 底部操作按钮面板
-        JPanel bottomPanel = createBottomPanel();
-        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
-        
-        // 状态栏
-        statusLabel = new JLabel("就绪");
+        // 底部状态栏
+        statusLabel = new JLabel("就绪 | 提示：右键点击应用可进行操作");
         statusLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        mainPanel.add(statusLabel, BorderLayout.PAGE_END);
+        mainPanel.add(statusLabel, BorderLayout.SOUTH);
         
         add(mainPanel);
         
         // 初始化数据
-        appList = new ArrayList<>();
+        allApps = new ArrayList<>();
         userAppsMap = new HashMap<>();
     }
     
@@ -110,11 +108,11 @@ public class AndroidAppManager extends JFrame {
         deviceComboBox.setPreferredSize(new Dimension(300, 25));
         panel.add(deviceComboBox);
         
-        refreshButton = new JButton("刷新设备");
+        refreshButton = new JButton("🔄 刷新设备");
         refreshButton.addActionListener(e -> loadDevices());
         panel.add(refreshButton);
         
-        JButton loadAppsButton = new JButton("加载应用");
+        JButton loadAppsButton = new JButton("📱 加载应用");
         loadAppsButton.addActionListener(e -> loadApps());
         panel.add(loadAppsButton);
         
@@ -122,53 +120,162 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
-     * 创建中间表格面板
+     * 创建双栏面板（左右分栏展示不同用户的应用）
      */
-    private JPanel createCenterPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("应用列表"));
+    private JPanel createDualColumnPanel() {
+        JPanel panel = new JPanel(new GridLayout(1, 2, 10, 0));
         
-        // 表格模型
-        String[] columns = {"用户ID", "包名", "类型"};
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; // 表格不可编辑
-            }
-        };
+        // 左栏：用户0（主用户）
+        JPanel leftPanel = createUserPanel("用户 0 (主用户)", true);
+        panel.add(leftPanel);
         
-        appTable = new JTable(tableModel);
-        appTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        appTable.setRowHeight(25);
-        appTable.getTableHeader().setReorderingAllowed(false);
-        
-        // 添加滚动条
-        JScrollPane scrollPane = new JScrollPane(appTable);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        // 右栏：其他用户
+        JPanel rightPanel = createUserPanel("其他用户", false);
+        panel.add(rightPanel);
         
         return panel;
     }
     
     /**
-     * 创建底部操作按钮面板
+     * 创建用户应用面板
      */
-    private JPanel createBottomPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("应用操作"));
+    private JPanel createUserPanel(String title, boolean isUser0) {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createTitledBorder(title));
         
-        uninstallButton = new JButton("卸载应用");
-        uninstallButton.addActionListener(e -> uninstallApp());
-        panel.add(uninstallButton);
+        // 表格模型
+        String[] columns = {"包名", "类型"};
+        DefaultTableModel model = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
         
-        clearDataButton = new JButton("清除数据");
-        clearDataButton.addActionListener(e -> clearData());
-        panel.add(clearDataButton);
+        if (isUser0) {
+            user0Model = model;
+        } else {
+            otherUserModel = model;
+        }
         
-        clearCacheButton = new JButton("清除缓存");
-        clearCacheButton.addActionListener(e -> clearCache());
-        panel.add(clearCacheButton);
+        JTable table = new JTable(model);
+        if (isUser0) {
+            user0Table = table;
+        } else {
+            otherUserTable = table;
+        }
+        
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        table.setRowHeight(25);
+        table.getTableHeader().setReorderingAllowed(false);
+        
+        // 添加右键菜单
+        addContextMenu(table, isUser0);
+        
+        // 添加双击事件
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    showAppOperations(table, isUser0);
+                }
+            }
+        });
+        
+        JScrollPane scrollPane = new JScrollPane(table);
+        panel.add(scrollPane, BorderLayout.CENTER);
+        
+        // 底部提示
+        JLabel hintLabel = new JLabel("💡 右键或双击应用进行操作");
+        hintLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        hintLabel.setFont(new Font("微软雅黑", Font.PLAIN, 11));
+        hintLabel.setForeground(Color.GRAY);
+        panel.add(hintLabel, BorderLayout.SOUTH);
         
         return panel;
+    }
+    
+    /**
+     * 添加右键上下文菜单
+     */
+    private void addContextMenu(JTable table, boolean isUser0) {
+        JPopupMenu popupMenu = new JPopupMenu();
+        
+        JMenuItem uninstallItem = new JMenuItem("🗑️ 卸载应用");
+        uninstallItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                uninstallApp(app);
+            }
+        });
+        popupMenu.add(uninstallItem);
+        
+        JMenuItem clearDataItem = new JMenuItem("🧹 清除数据");
+        clearDataItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                clearData(app);
+            }
+        });
+        popupMenu.add(clearDataItem);
+        
+        JMenuItem clearCacheItem = new JMenuItem("📦 清除缓存");
+        clearCacheItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                clearCache(app);
+            }
+        });
+        popupMenu.add(clearCacheItem);
+        
+        popupMenu.addSeparator();
+        
+        JMenuItem copyPackageItem = new JMenuItem("📋 复制包名");
+        copyPackageItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
+                    new java.awt.datatransfer.StringSelection(app.packageName), null);
+                setStatus("已复制包名: " + app.packageName);
+            }
+        });
+        popupMenu.add(copyPackageItem);
+        
+        table.setComponentPopupMenu(popupMenu);
+    }
+    
+    /**
+     * 显示应用操作对话框
+     */
+    private void showAppOperations(JTable table, boolean isUser0) {
+        AppInfo app = getSelectedApp(table, isUser0);
+        if (app == null) {
+            return;
+        }
+        
+        String[] options = {"卸载应用", "清除数据", "清除缓存", "取消"};
+        int choice = JOptionPane.showOptionDialog(
+            this,
+            "选择对 \"" + app.packageName + "\" 的操作：",
+            "应用操作",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]
+        );
+        
+        switch (choice) {
+            case 0:
+                uninstallApp(app);
+                break;
+            case 1:
+                clearData(app);
+                break;
+            case 2:
+                clearCache(app);
+                break;
+        }
     }
     
     /**
@@ -179,7 +286,7 @@ public class AndroidAppManager extends JFrame {
         deviceComboBox.removeAllItems();
         
         try {
-            Process process = Runtime.getRuntime().exec("adb devices");
+            Process process = Runtime.getRuntime().exec(new String[]{"adb", "devices"});
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
             String line;
@@ -227,9 +334,12 @@ public class AndroidAppManager extends JFrame {
         }
         
         setStatus("正在加载应用列表...");
-        appList.clear();
+        allApps.clear();
         userAppsMap.clear();
-        tableModel.setRowCount(0);
+        
+        // 清空表格
+        user0Model.setRowCount(0);
+        otherUserModel.setRowCount(0);
         
         try {
             // 获取所有用户ID
@@ -239,12 +349,12 @@ public class AndroidAppManager extends JFrame {
             for (int userId : userIds) {
                 List<AppInfo> apps = getThirdPartyApps(device, userId);
                 userAppsMap.put(userId, apps);
-                appList.addAll(apps);
+                allApps.addAll(apps);
             }
             
-            // 更新表格
-            updateTable();
-            setStatus("已加载 " + appList.size() + " 个应用（" + userIds.size() + " 个用户）");
+            // 更新表格（分左右栏显示）
+            updateTables();
+            setStatus("已加载 " + allApps.size() + " 个应用（" + userIds.size() + " 个用户）");
             
         } catch (Exception e) {
             showError("加载应用列表失败: " + e.getMessage());
@@ -259,7 +369,7 @@ public class AndroidAppManager extends JFrame {
         List<Integer> userIds = new ArrayList<>();
         
         Process process = Runtime.getRuntime().exec(
-            "adb -s " + device + " shell pm list users"
+            new String[]{"adb", "-s", device, "shell", "pm", "list", "users"}
         );
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         
@@ -298,7 +408,7 @@ public class AndroidAppManager extends JFrame {
         List<AppInfo> apps = new ArrayList<>();
         
         Process process = Runtime.getRuntime().exec(
-            "adb -s " + device + " shell pm list packages -3 --user " + userId
+            new String[]{"adb", "-s", device, "shell", "pm", "list", "packages", "-3", "--user", String.valueOf(userId)}
         );
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         
@@ -318,47 +428,69 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
-     * 更新表格显示
+     * 更新表格显示（分左右栏）
      */
-    private void updateTable() {
-        tableModel.setRowCount(0);
+    private void updateTables() {
+        // 清空表格
+        user0Model.setRowCount(0);
+        otherUserModel.setRowCount(0);
         
-        for (AppInfo app : appList) {
-            String type = app.isHuidoudour ? "⭐ huidoudour应用" : "第三方应用";
-            tableModel.addRow(new Object[]{
-                app.userId,
-                app.packageName,
-                type
-            });
+        // 左栏：用户0的应用
+        List<AppInfo> user0Apps = userAppsMap.getOrDefault(0, new ArrayList<>());
+        for (AppInfo app : user0Apps) {
+            String type = app.isHuidoudour ? "⭐ huidoudour" : "第三方";
+            user0Model.addRow(new Object[]{app.packageName, type});
+        }
+        
+        // 右栏：其他用户的应用
+        for (Map.Entry<Integer, List<AppInfo>> entry : userAppsMap.entrySet()) {
+            if (entry.getKey() != 0) {
+                for (AppInfo app : entry.getValue()) {
+                    String type = app.isHuidoudour ? "⭐ huidoudour" : "第三方";
+                    otherUserModel.addRow(new Object[]{app.packageName + " [用户" + app.userId + "]", type});
+                }
+            }
         }
     }
     
     /**
      * 获取选中的应用
      */
-    private AppInfo getSelectedApp() {
-        int selectedRow = appTable.getSelectedRow();
+    private AppInfo getSelectedApp(JTable table, boolean isUser0) {
+        int selectedRow = table.getSelectedRow();
         if (selectedRow < 0) {
+            showWarning("请先选择一个应用");
             return null;
         }
         
-        if (selectedRow < appList.size()) {
-            return appList.get(selectedRow);
+        List<AppInfo> apps = isUser0 ? 
+            userAppsMap.getOrDefault(0, new ArrayList<>()) :
+            getAllOtherUserApps();
+        
+        if (selectedRow < apps.size()) {
+            return apps.get(selectedRow);
         }
         
         return null;
     }
     
     /**
+     * 获取所有其他用户的应用
+     */
+    private List<AppInfo> getAllOtherUserApps() {
+        List<AppInfo> result = new ArrayList<>();
+        for (Map.Entry<Integer, List<AppInfo>> entry : userAppsMap.entrySet()) {
+            if (entry.getKey() != 0) {
+                result.addAll(entry.getValue());
+            }
+        }
+        return result;
+    }
+    
+    /**
      * 卸载应用
      */
-    private void uninstallApp() {
-        AppInfo app = getSelectedApp();
-        if (app == null) {
-            showWarning("请先选择一个应用");
-            return;
-        }
-        
+    private void uninstallApp(AppInfo app) {
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
@@ -382,7 +514,7 @@ public class AndroidAppManager extends JFrame {
         
         try {
             Process process = Runtime.getRuntime().exec(
-                "adb -s " + device + " uninstall " + app.packageName
+                new String[]{"adb", "-s", device, "uninstall", app.packageName}
             );
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
@@ -398,7 +530,7 @@ public class AndroidAppManager extends JFrame {
             String result = output.toString();
             if (result.contains("Success")) {
                 showSuccess("应用卸载成功！");
-                loadApps(); // 重新加载应用列表
+                loadApps();
             } else {
                 showError("卸载失败: " + result);
             }
@@ -412,13 +544,7 @@ public class AndroidAppManager extends JFrame {
     /**
      * 清除应用数据
      */
-    private void clearData() {
-        AppInfo app = getSelectedApp();
-        if (app == null) {
-            showWarning("请先选择一个应用");
-            return;
-        }
-        
+    private void clearData(AppInfo app) {
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
@@ -442,7 +568,7 @@ public class AndroidAppManager extends JFrame {
         
         try {
             Process process = Runtime.getRuntime().exec(
-                "adb -s " + device + " shell pm clear " + app.packageName
+                new String[]{"adb", "-s", device, "shell", "pm", "clear", app.packageName}
             );
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
@@ -471,13 +597,7 @@ public class AndroidAppManager extends JFrame {
     /**
      * 清除应用缓存
      */
-    private void clearCache() {
-        AppInfo app = getSelectedApp();
-        if (app == null) {
-            showWarning("请先选择一个应用");
-            return;
-        }
-        
+    private void clearCache(AppInfo app) {
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
@@ -500,10 +620,8 @@ public class AndroidAppManager extends JFrame {
         setStatus("正在清除应用缓存...");
         
         try {
-            // 使用pm trim-caches命令清除所有缓存，或者使用特定方法
-            // 注意：Android没有直接清除单个应用缓存的命令，这里使用变通方法
             Process process = Runtime.getRuntime().exec(
-                "adb -s " + device + " shell pm clear " + app.packageName
+                new String[]{"adb", "-s", device, "shell", "pm", "clear", app.packageName}
             );
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
