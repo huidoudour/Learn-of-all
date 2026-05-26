@@ -1,4 +1,4 @@
 /bak
 /build
 .vscode
-
+*.log
