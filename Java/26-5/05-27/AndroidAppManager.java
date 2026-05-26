@@ -28,17 +28,17 @@ import java.util.Map;
  */
 public class AndroidAppManager extends JFrame {
     
-    // 配色方案 - 柔和护眼版
-    private static final Color PRIMARY_COLOR = new Color(70, 130, 180);        // 钢蓝色（柔和）
-    private static final Color SUCCESS_COLOR = new Color(60, 140, 90);         // 柔和绿
-    private static final Color WARNING_COLOR = new Color(210, 160, 50);        // 柔和黄
-    private static final Color DANGER_COLOR = new Color(190, 70, 70);          // 柔和红
-    private static final Color BACKGROUND_COLOR = new Color(245, 246, 247);    // 浅灰背景
-    private static final Color CARD_COLOR = new Color(252, 252, 253);          // 卡片白
-    private static final Color TEXT_PRIMARY = new Color(50, 50, 50);           // 主文字
-    private static final Color TEXT_SECONDARY = new Color(100, 100, 100);      // 次要文字
-    private static final Color BORDER_COLOR = new Color(220, 222, 225);        // 边框色
-    private static final Color HOVER_COLOR = new Color(235, 240, 245);         // 悬停色
+    // 配色方案 - 深灰主题（低饱和度点缀色）
+    private static final Color PRIMARY_COLOR = new Color(56, 142, 90);         // 青灰绿（主色调）
+    private static final Color SUCCESS_COLOR = new Color(56, 142, 90);        // 青灰绿
+    private static final Color WARNING_COLOR = new Color(185, 140, 50);       // 暖琥珀（低饱和）
+    private static final Color DANGER_COLOR = new Color(175, 75, 65);         // 砖红（低饱和）
+    private static final Color BACKGROUND_COLOR = new Color(38, 40, 42);      // 炭灰背景
+    private static final Color CARD_COLOR = new Color(52, 55, 59);            // 暖灰卡片
+    private static final Color TEXT_PRIMARY = new Color(190, 195, 200);       // 蓝灰文字
+    private static final Color TEXT_SECONDARY = new Color(125, 130, 138);     // 中灰文字
+    private static final Color BORDER_COLOR = new Color(68, 71, 76);          // 深色边框
+    private static final Color HOVER_COLOR = new Color(62, 65, 70);           // 悬停色
     
     // UI组件
     private JComboBox<String> deviceComboBox;
@@ -69,7 +69,7 @@ public class AndroidAppManager extends JFrame {
         
         @Override
         public String toString() {
-            return packageName + (isHuidoudour ? " ⭐" : "");
+            return packageName + (isHuidoudour ? " # " : "");
         }
     }
     
@@ -106,9 +106,17 @@ public class AndroidAppManager extends JFrame {
         
         // 设置默认窗口大小为1366x768（包括标题栏和边框的整体窗口）
         setSize(windowWidth, windowHeight);
-        
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+        
+        // 去掉系统标题栏，使用自定义深色标题栏
+        setUndecorated(true);
+        getRootPane().setWindowDecorationStyle(JRootPane.NONE);
+        
+        // 设置JFrame及内容面板背景色
+        getContentPane().setBackground(BACKGROUND_COLOR);
+        getRootPane().setBackground(BACKGROUND_COLOR);
+        setBackground(BACKGROUND_COLOR);
         
         // 设置窗口图标（如果有的话）
         try {
@@ -135,12 +143,18 @@ public class AndroidAppManager extends JFrame {
         statusLabel.setFont(new Font("微软雅黑", Font.PLAIN, 13));
         statusLabel.setForeground(TEXT_SECONDARY);
         statusLabel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(232, 234, 237)),
+            BorderFactory.createMatteBorder(1, 0, 0, 0, BORDER_COLOR),
             BorderFactory.createEmptyBorder(10, 5, 10, 5)
         ));
         mainPanel.add(statusLabel, BorderLayout.SOUTH);
         
-        add(mainPanel);
+        // 外层容器：自定义标题栏 + 主面板
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setBackground(BACKGROUND_COLOR);
+        wrapper.add(createTitleBar(), BorderLayout.NORTH);
+        wrapper.add(mainPanel, BorderLayout.CENTER);
+        wrapper.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));
+        add(wrapper);
         
         // 初始化数据
         allApps = new ArrayList<>();
@@ -161,7 +175,7 @@ public class AndroidAppManager extends JFrame {
         g2d.fillOval(2, 2, size - 4, size - 4);
         
         // 绘制Android机器人简图
-        g2d.setColor(Color.WHITE);
+        g2d.setColor(TEXT_PRIMARY);
         g2d.setStroke(new BasicStroke(2));
         g2d.drawOval(10, 8, 12, 10);  // 头部
         g2d.drawRect(8, 18, 16, 10);  // 身体
@@ -202,9 +216,9 @@ public class AndroidAppManager extends JFrame {
      */
     private JPanel createTopPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 8));
-        panel.setBackground(CARD_COLOR);
+        panel.setBackground(BACKGROUND_COLOR);
         panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(232, 234, 237), 1),
+            BorderFactory.createLineBorder(BORDER_COLOR, 1),
             BorderFactory.createEmptyBorder(12, 15, 12, 15)
         ));
         
@@ -218,8 +232,43 @@ public class AndroidAppManager extends JFrame {
         deviceComboBox = new JComboBox<>();
         deviceComboBox.setPreferredSize(new Dimension(300, 32));
         deviceComboBox.setFont(new Font("微软雅黑", Font.PLAIN, 12));
-        deviceComboBox.setBackground(Color.WHITE);
+        deviceComboBox.setBackground(CARD_COLOR);
+        deviceComboBox.setForeground(TEXT_PRIMARY);
+        // 自定义下拉列表渲染器，覆盖系统L&F的白色背景
+        deviceComboBox.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value,
+                    int index, boolean isSelected, boolean cellHasFocus) {
+                Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (isSelected) {
+                    setBackground(HOVER_COLOR);
+                } else {
+                    setBackground(CARD_COLOR);
+                }
+                setForeground(TEXT_PRIMARY);
+                setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+                return c;
+            }
+        });
         panel.add(deviceComboBox);
+        
+        // 强制下拉弹出框适配深色背景
+        deviceComboBox.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                SwingUtilities.invokeLater(() -> {
+                    JComboBox<?> cb = (JComboBox<?>) e.getSource();
+                    for (int i = 0; i < cb.getComponentCount(); i++) {
+                        Component comp = cb.getComponent(i);
+                        if (comp instanceof JComponent) {
+                            ((JComponent) comp).setBackground(CARD_COLOR);
+                        }
+                    }
+                });
+            }
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
         
         // 刷新按钮
         refreshButton = createStyledButton("刷新设备", PRIMARY_COLOR);
@@ -232,6 +281,114 @@ public class AndroidAppManager extends JFrame {
         panel.add(loadAppsButton);
         
         return panel;
+    }
+    
+    /**
+     * 创建自定义深色标题栏（替代系统白色标题栏）
+     */
+    private JPanel createTitleBar() {
+        JPanel titleBar = new JPanel(new BorderLayout());
+        titleBar.setBackground(new Color(30, 32, 34));
+        titleBar.setPreferredSize(new Dimension(getWidth(), 36));
+        titleBar.setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 4));
+        
+        // 标题文字
+        JLabel titleLabel = new JLabel("  Android应用管理工具 - 慧兜兜专用版");
+        titleLabel.setFont(new Font("微软雅黑", Font.BOLD, 13));
+        titleLabel.setForeground(new Color(170, 175, 182));
+        titleBar.add(titleLabel, BorderLayout.WEST);
+        
+        // 按钮面板
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        btnPanel.setOpaque(false);
+        
+        // 最小化按钮
+        JButton minBtn = createTitleButton("—");
+        minBtn.addActionListener(e -> setState(JFrame.ICONIFIED));
+        btnPanel.add(minBtn);
+        
+        // 最大化/还原按钮
+        JButton maxBtn = createTitleButton("□");
+        maxBtn.addActionListener(e -> {
+            if (getExtendedState() == JFrame.MAXIMIZED_BOTH) {
+                setExtendedState(JFrame.NORMAL);
+                maxBtn.setText("□");
+            } else {
+                setExtendedState(JFrame.MAXIMIZED_BOTH);
+                maxBtn.setText("❐");
+            }
+        });
+        btnPanel.add(maxBtn);
+        
+        // 关闭按钮
+        JButton closeBtn = createTitleButton("✕");
+        closeBtn.addActionListener(e -> System.exit(0));
+        closeBtn.addMouseListener(new MouseAdapter() {
+            @Override public void mouseEntered(MouseEvent e) { closeBtn.setBackground(DANGER_COLOR); }
+            @Override public void mouseExited(MouseEvent e) { closeBtn.setBackground(new Color(30, 32, 34)); }
+        });
+        btnPanel.add(closeBtn);
+        
+        titleBar.add(btnPanel, BorderLayout.EAST);
+        
+        // 支持拖拽窗口（标准偏移量算法）
+        final Point[] clickPoint = {null};
+        titleBar.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                clickPoint[0] = e.getPoint(); // 记录鼠标在titleBar内的相对位置
+            }
+        });
+        titleBar.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (clickPoint[0] != null) {
+                    Point screenPos = e.getLocationOnScreen();
+                    setLocation(screenPos.x - clickPoint[0].x, screenPos.y - clickPoint[0].y);
+                }
+            }
+        });
+        
+        return titleBar;
+    }
+    
+    /**
+     * 创建标题栏按钮（圆角、深色主题）
+     */
+    private JButton createTitleButton(String text) {
+        JButton btn = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setColor(getBackground());
+                g2d.fillRoundRect(0, 1, getWidth(), getHeight() - 2, 6, 6);
+                g2d.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btn.setFont(new Font("微软雅黑", Font.PLAIN, 14));
+        btn.setForeground(new Color(190, 195, 200));
+        btn.setBackground(new Color(30, 32, 34));
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setOpaque(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(40, 28));
+        btn.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btn.setBackground(HOVER_COLOR);
+                btn.repaint();
+            }
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btn.setBackground(new Color(30, 32, 34));
+                btn.repaint();
+            }
+        });
+        return btn;
     }
     
     /**
@@ -260,7 +417,7 @@ public class AndroidAppManager extends JFrame {
         };
         
         button.setFont(new Font("微软雅黑", Font.BOLD, 12));
-        button.setForeground(Color.WHITE);
+        button.setForeground(new Color(228, 230, 235));
         button.setBackground(bgColor);
         button.setFocusPainted(false);
         button.setBorderPainted(false);
@@ -308,7 +465,7 @@ public class AndroidAppManager extends JFrame {
      */
     private JPanel createUserPanel(String title, boolean isUser0) {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBackground(CARD_COLOR);
+        panel.setBackground(BACKGROUND_COLOR); // 改为使用浅灰背景
         
         // 圆角边框
         panel.setBorder(BorderFactory.createCompoundBorder(
@@ -318,10 +475,10 @@ public class AndroidAppManager extends JFrame {
         
         // 标题面板
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        titlePanel.setBackground(CARD_COLOR);
+        titlePanel.setBackground(BACKGROUND_COLOR); // 标题面板也使用浅灰背景
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(new Font("微软雅黑", Font.BOLD, 14));
-        titleLabel.setForeground(isUser0 ? PRIMARY_COLOR : new Color(130, 80, 160)); // 更柔和的紫色
+        titleLabel.setForeground(isUser0 ? PRIMARY_COLOR : new Color(145, 130, 165)); // 灰紫色
         titlePanel.add(titleLabel);
         panel.add(titlePanel, BorderLayout.NORTH);
         
@@ -364,8 +521,8 @@ public class AndroidAppManager extends JFrame {
         });
         
         JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(232, 234, 237)));
-        scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        scrollPane.getViewport().setBackground(CARD_COLOR); // 使用纯白卡片色作为表格背景
         panel.add(scrollPane, BorderLayout.CENTER);
         
         // 底部提示
@@ -387,19 +544,39 @@ public class AndroidAppManager extends JFrame {
         table.setRowHeight(28);
         table.getTableHeader().setReorderingAllowed(false);
         table.setFont(new Font("微软雅黑", Font.PLAIN, 12));
-        table.setGridColor(new Color(232, 234, 237));
+        table.setGridColor(new Color(63, 66, 71));
         table.setShowGrid(true);
         table.setIntercellSpacing(new Dimension(0, 0));
         
         // 表头样式
         table.getTableHeader().setFont(new Font("微软雅黑", Font.BOLD, 12));
         table.getTableHeader().setBackground(isUser0 ? 
-            new Color(227, 242, 253) : new Color(243, 229, 245));
+            new Color(55, 68, 64) : new Color(68, 63, 74)); // 青灰/紫灰表头
         table.getTableHeader().setForeground(TEXT_PRIMARY);
         table.getTableHeader().setPreferredSize(new Dimension(0, 35));
         
+        // 自定义表头渲染器（覆盖系统L&F默认白色背景）
+        final Color headerBg = isUser0 ? new Color(55, 68, 64) : new Color(68, 63, 74);
+        table.getTableHeader().setDefaultRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, 
+                    isSelected, hasFocus, row, column);
+                setBackground(headerBg);
+                setForeground(TEXT_PRIMARY);
+                setFont(new Font("微软雅黑", Font.BOLD, 12));
+                setHorizontalAlignment(CENTER);
+                setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(63, 66, 71)),
+                    BorderFactory.createEmptyBorder(4, 8, 4, 8)
+                ));
+                return c;
+            }
+        });
+        
         // 选中行样式
-        table.setSelectionBackground(new Color(232, 240, 254));
+        table.setSelectionBackground(new Color(58, 67, 80));
         table.setSelectionForeground(TEXT_PRIMARY);
         
         // 自定义单元格渲染器
@@ -412,11 +589,11 @@ public class AndroidAppManager extends JFrame {
                 
                 if (!isSelected) {
                     // 交替行颜色
-                    setBackground(row % 2 == 0 ? Color.WHITE : new Color(250, 250, 250));
+                    setBackground(row % 2 == 0 ? CARD_COLOR : new Color(57, 60, 64));
                     
                     // huidoudour应用特殊标记
                     if (column == 1 && value != null && value.toString().contains("⭐")) {
-                        setForeground(new Color(255, 152, 0)); // 橙色
+                        setForeground(new Color(200, 138, 35)); // 暖金（低饱和）
                         setFont(getFont().deriveFont(Font.BOLD));
                     } else {
                         setForeground(TEXT_PRIMARY);
@@ -433,8 +610,28 @@ public class AndroidAppManager extends JFrame {
      * 添加右键上下文菜单
      */
     private void addContextMenu(JTable table, boolean isUser0) {
-        JPopupMenu popupMenu = new JPopupMenu();
-        popupMenu.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        JPopupMenu popupMenu = new JPopupMenu() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setColor(CARD_COLOR);
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                g2d.dispose();
+            }
+            
+            @Override
+            protected void paintBorder(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setColor(BORDER_COLOR);
+                g2d.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
+                g2d.dispose();
+            }
+        };
+        popupMenu.setOpaque(false);
+        popupMenu.setBackground(CARD_COLOR);
+        popupMenu.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         
         // 启动应用
         JMenuItem launchItem = createMenuItem("启动应用", "启动此应用");
@@ -446,7 +643,7 @@ public class AndroidAppManager extends JFrame {
         });
         popupMenu.add(launchItem);
         
-        popupMenu.addSeparator();
+        popupMenu.add(createThemedSeparator());
         
         // 强制停止
         JMenuItem forceStopItem = createMenuItem("强制停止", "强制停止应用运行");
@@ -468,7 +665,7 @@ public class AndroidAppManager extends JFrame {
         });
         popupMenu.add(killProcessItem);
         
-        popupMenu.addSeparator();
+        popupMenu.add(createThemedSeparator());
         
         // 卸载应用
         JMenuItem uninstallItem = createMenuItem("卸载应用", "完全卸载此应用");
@@ -500,7 +697,7 @@ public class AndroidAppManager extends JFrame {
         });
         popupMenu.add(clearCacheItem);
         
-        popupMenu.addSeparator();
+        popupMenu.add(createThemedSeparator());
         
         // 复制包名
         JMenuItem copyPackageItem = createMenuItem("复制包名", "复制包名到剪贴板");
@@ -520,13 +717,43 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
-     * 创建菜单项
+     * 创建菜单项（深色主题，自定义绘制覆盖系统L&F）
      */
     private JMenuItem createMenuItem(String text, String tooltip) {
-        JMenuItem item = new JMenuItem(text);
+        JMenuItem item = new JMenuItem(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isArmed() || getModel().isSelected()) {
+                    g2d.setColor(HOVER_COLOR);
+                } else {
+                    g2d.setColor(CARD_COLOR);
+                }
+                g2d.fillRoundRect(2, 1, getWidth() - 4, getHeight() - 2, 6, 6);
+                g2d.dispose();
+                super.paintComponent(g);
+            }
+        };
         item.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        item.setForeground(TEXT_PRIMARY);
+        item.setBackground(CARD_COLOR);
         item.setToolTipText(tooltip);
+        item.setOpaque(false);
+        item.setContentAreaFilled(false);
+        item.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        item.setPreferredSize(new Dimension(180, 32));
         return item;
+    }
+    
+    /**
+     * 创建深色主题分隔线
+     */
+    private JSeparator createThemedSeparator() {
+        JSeparator sep = new JSeparator();
+        sep.setForeground(BORDER_COLOR);
+        sep.setBackground(CARD_COLOR);
+        return sep;
     }
     
     /**
@@ -769,7 +996,7 @@ public class AndroidAppManager extends JFrame {
         // 左栏：用户0的应用
         List<AppInfo> user0Apps = userAppsMap.getOrDefault(0, new ArrayList<>());
         for (AppInfo app : user0Apps) {
-            String type = app.isHuidoudour ? "⭐ huidoudour" : "第三方";
+            String type = app.isHuidoudour ? "# huidoudour" : "第三方";
             user0Model.addRow(new Object[]{app.packageName, type});
         }
         
@@ -777,7 +1004,7 @@ public class AndroidAppManager extends JFrame {
         for (Map.Entry<Integer, List<AppInfo>> entry : userAppsMap.entrySet()) {
             if (entry.getKey() != 0) {
                 for (AppInfo app : entry.getValue()) {
-                    String type = app.isHuidoudour ? "⭐ huidoudour" : "第三方";
+                    String type = app.isHuidoudour ? "# huidoudour" : "第三方";
                     otherUserModel.addRow(new Object[]{app.packageName + " [用户" + app.userId + "]", type});
                 }
             }
@@ -1426,12 +1653,59 @@ public class AndroidAppManager extends JFrame {
         System.out.println("===========================================================");
         System.out.println();
         
-        // 设置系统外观
+        // 设置系统外观前，预设深灰色UIManager默认值
+        Color darkBg = new Color(38, 40, 42);
+        Color cardBg = new Color(52, 55, 59);
+        Color textPrimary = new Color(190, 195, 200);
+        Color borderColor = new Color(68, 71, 76);
+        UIManager.put("Panel.background", darkBg);
+        UIManager.put("OptionPane.background", darkBg);
+        UIManager.put("OptionPane.messageForeground", textPrimary);
+        UIManager.put("TableHeader.background", cardBg);
+        UIManager.put("TableHeader.foreground", textPrimary);
+        UIManager.put("ComboBox.background", cardBg);
+        UIManager.put("ComboBox.foreground", textPrimary);
+        UIManager.put("Label.foreground", textPrimary);
+        UIManager.put("PopupMenu.background", cardBg);
+        UIManager.put("PopupMenu.foreground", textPrimary);
+        UIManager.put("MenuItem.background", cardBg);
+        UIManager.put("MenuItem.foreground", textPrimary);
+        UIManager.put("ScrollPane.background", darkBg);
+        UIManager.put("Viewport.background", cardBg);
+        UIManager.put("ScrollBar.background", cardBg);
+        UIManager.put("ScrollBar.foreground", new Color(100, 103, 108));
+        UIManager.put("ScrollBar.thumb", new Color(90, 93, 98));
+        UIManager.put("ScrollBar.track", darkBg);
+        UIManager.put("ScrollBar.thumbDarkShadow", new Color(70, 73, 78));
+        UIManager.put("ScrollBar.thumbHighlight", new Color(105, 108, 113));
+        
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             e.printStackTrace();
         }
+        
+        // L&F应用后再次覆盖，确保生效
+        UIManager.put("Panel.background", darkBg);
+        UIManager.put("OptionPane.background", darkBg);
+        UIManager.put("OptionPane.messageForeground", textPrimary);
+        UIManager.put("TableHeader.background", cardBg);
+        UIManager.put("TableHeader.foreground", textPrimary);
+        UIManager.put("ComboBox.background", cardBg);
+        UIManager.put("ComboBox.foreground", textPrimary);
+        UIManager.put("Label.foreground", textPrimary);
+        UIManager.put("PopupMenu.background", cardBg);
+        UIManager.put("PopupMenu.foreground", textPrimary);
+        UIManager.put("MenuItem.background", cardBg);
+        UIManager.put("MenuItem.foreground", textPrimary);
+        UIManager.put("ScrollPane.background", darkBg);
+        UIManager.put("Viewport.background", cardBg);
+        UIManager.put("ScrollBar.background", cardBg);
+        UIManager.put("ScrollBar.foreground", new Color(100, 103, 108));
+        UIManager.put("ScrollBar.thumb", new Color(90, 93, 98));
+        UIManager.put("ScrollBar.track", darkBg);
+        UIManager.put("ScrollBar.thumbDarkShadow", new Color(70, 73, 78));
+        UIManager.put("ScrollBar.thumbHighlight", new Color(105, 108, 113));
         
         // 在事件调度线程中启动GUI
         SwingUtilities.invokeLater(() -> {

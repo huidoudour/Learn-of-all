@@ -134,6 +134,64 @@ jobs:
           fi
           echo "================================="
 
+      - name: Compile standalone Java files
+        if: steps.check-changes.outputs.java_changed == 'true'
+        continue-on-error: true
+        run: |
+          echo "Searching for standalone Java files (no pom.xml in ancestor dirs)..."
+
+          # 找到所有 .java 文件，排除 Maven 项目内的（祖先目录有 pom.xml）
+          find Java -name "*.java" -type f > /tmp/all_java_files.txt
+
+          > /tmp/standalone_java_files.txt
+          while read -r java_file; do
+            dir=$(dirname "$java_file")
+            check_dir="$dir"
+            has_pom=false
+            while [ "$check_dir" != "Java" ] && [ "$check_dir" != "." ]; do
+              if [ -f "$check_dir/pom.xml" ]; then
+                has_pom=true
+                break
+              fi
+              check_dir=$(dirname "$check_dir")
+            done
+            if [ "$has_pom" = false ]; then
+              echo "$java_file" >> /tmp/standalone_java_files.txt
+            fi
+          done < /tmp/all_java_files.txt
+
+          if [ -s /tmp/standalone_java_files.txt ]; then
+            echo "Found standalone Java files:"
+            cat /tmp/standalone_java_files.txt
+            echo ""
+
+            FAILED_FILES=""
+            SUCCESS_FILES=""
+            while read -r java_file; do
+              file_dir=$(dirname "$java_file")
+              echo "Compiling: $java_file"
+              if javac -d "$file_dir" "$java_file" 2>&1; then
+                SUCCESS_FILES="$SUCCESS_FILES
+              - $java_file"
+              else
+                FAILED_FILES="$FAILED_FILES
+              - $java_file"
+              fi
+            done < /tmp/standalone_java_files.txt
+
+            echo ""
+            echo "===== Standalone Compilation Summary ====="
+            echo "Successful:$SUCCESS_FILES"
+            if [ -n "$FAILED_FILES" ]; then
+              echo "Failed:$FAILED_FILES"
+            else
+              echo "All standalone files compiled successfully!"
+            fi
+          else
+            echo "No standalone Java files found."
+          fi
+          echo "==========================================="
+
       - name: Package compiled artifacts
         if: steps.check-changes.outputs.java_changed == 'true'
         continue-on-error: true
@@ -143,26 +201,37 @@ jobs:
           # 创建打包目录
           mkdir -p java-build-output
           
-          # 复制所有 target 目录（如果存在）
+          # 复制所有 target 目录（Maven 编译产物）
           find Java -type d -name "target" -exec cp -r {} java-build-output/ \; 2>/dev/null || true
+
+          # 收集独立 .class 文件（非 target 目录内的，即 javac 编译产物）
+          echo "Collecting standalone .class files..."
+          find Java -name "*.class" -type f | while read -r class_file; do
+            # 跳过 target 目录内的（已在上一步复制）
+            case "$class_file" in
+              */target/*) continue ;;
+            esac
+            dest="java-build-output/$(dirname "$class_file")"
+            mkdir -p "$dest"
+            cp "$class_file" "$dest/"
+            echo "  Packaged: $class_file"
+          done
           
-          # 如果没有 target 目录，创建一个说明文件
-          if [ ! -d "java-build-output/target" ]; then
+          # 如果没有任何编译产物，创建一个说明文件
+          if [ ! -d "java-build-output/target" ] && ! find java-build-output -name "*.class" -type f | grep -q .; then
             echo "No compiled artifacts found (compilation may have failed or no Java changes)" > java-build-output/BUILD_INFO.txt
             echo "Build time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> java-build-output/BUILD_INFO.txt
           fi
           
-          # 打包为 build-pack.zip
-          cd java-build-output
-          zip -r ../build-pack.zip .
-          cd ..
+          # 直接上传目录，GitHub Actions 会自动打包（避免双重 zip）
+          echo "Ready to upload java-build-output/"
 
       - name: Upload Java build artifacts
         if: steps.check-changes.outputs.java_changed == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: build-pack.zip
-          path: build-pack.zip
+          name: java-build-output
+          path: java-build-output/
           retention-days: 7
 
   # Job 2: 代码打包任务 - 打包所有代码文件
@@ -184,37 +253,35 @@ jobs:
           echo "author=${{ github.actor }}" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_OUTPUT
 
-      - name: Package all code
+      - name: Prepare code package
         run: |
-          echo "Packaging all code files..."
+          echo "Preparing code package..."
+          
+          # 创建 staging 目录
+          STAGING="code-package-output"
+          mkdir -p "$STAGING"
+          
+          # 复制所有文件（排除 .git 目录和自身 staging 目录）
+          rsync -a --exclude='.git' --exclude='.gitignore' --exclude="$STAGING" ./ "$STAGING/"
           
           # 创建打包信息文件
-          echo "Learn-of-all Project Package" > PACKAGING_INFO.txt
-          echo "============================" >> PACKAGING_INFO.txt
-          echo "Branch: ${{ steps.commit-info.outputs.branch }}" >> PACKAGING_INFO.txt
-          echo "Commit: ${{ steps.commit-info.outputs.commit_sha }}" >> PACKAGING_INFO.txt
-          echo "Message: ${{ steps.commit-info.outputs.commit_message }}" >> PACKAGING_INFO.txt
-          echo "Author: ${{ steps.commit-info.outputs.author }}" >> PACKAGING_INFO.txt
-          echo "Timestamp: ${{ steps.commit-info.outputs.timestamp }} (UTC)" >> PACKAGING_INFO.txt
-          echo "" >> PACKAGING_INFO.txt
-          echo "This package contains all project files excluding .git directory." >> PACKAGING_INFO.txt
-          echo "Generated by GitHub Actions CI/CD Pipeline." >> PACKAGING_INFO.txt
+          echo "Learn-of-all Project Package" > "$STAGING/PACKAGING_INFO.txt"
+          echo "============================" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "Branch: ${{ steps.commit-info.outputs.branch }}" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "Commit: ${{ steps.commit-info.outputs.commit_sha }}" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "Message: ${{ steps.commit-info.outputs.commit_message }}" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "Author: ${{ steps.commit-info.outputs.author }}" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "Timestamp: ${{ steps.commit-info.outputs.timestamp }} (UTC)" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "" >> "$STAGING/PACKAGING_INFO.txt"
+          echo "This package contains all project files excluding .git directory." >> "$STAGING/PACKAGING_INFO.txt"
+          echo "Generated by GitHub Actions CI/CD Pipeline." >> "$STAGING/PACKAGING_INFO.txt"
           
-          # 打包所有文件（排除 .git 目录）为 auto-pack.zip
-          zip -r auto-pack.zip . \
-            -x "*.git/*" \
-            -x ".gitignore" \
-            -x "PACKAGING_INFO.txt"
-          
-          # 将打包信息文件也加入压缩包
-          zip -u auto-pack.zip PACKAGING_INFO.txt
-          
-          echo "Package created: auto-pack.zip"
-          ls -lh auto-pack.zip
+          echo "Staging directory ready: $STAGING"
+          du -sh "$STAGING"
 
       - name: Upload code package artifact
         uses: actions/upload-artifact@v6
         with:
-          name: auto-pack.zip
-          path: auto-pack.zip
+          name: auto-pack
+          path: code-package-output/
           retention-days: 30
