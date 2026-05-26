@@ -3,11 +3,13 @@
 // 该程序仅用于学习和研究，不建议在生产环境中使用
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -21,9 +23,19 @@ import java.util.Map;
  * 采用双栏布局展示多用户应用（类似Android桌面启动器抽屉模式）
  * 
  * @author huidoudour
- * @version 2.0
+ * @version 3.0 - UI美化版
  */
 public class AndroidAppManager extends JFrame {
+    
+    // 配色方案
+    private static final Color PRIMARY_COLOR = new Color(66, 133, 244);      // Google蓝
+    private static final Color SUCCESS_COLOR = new Color(52, 168, 83);       // 成功绿
+    private static final Color WARNING_COLOR = new Color(251, 188, 5);       // 警告黄
+    private static final Color DANGER_COLOR = new Color(234, 67, 53);        // 危险红
+    private static final Color BACKGROUND_COLOR = new Color(248, 249, 250);  // 浅灰背景
+    private static final Color CARD_COLOR = Color.WHITE;                     // 卡片白
+    private static final Color TEXT_PRIMARY = new Color(32, 33, 36);         // 主文字
+    private static final Color TEXT_SECONDARY = new Color(95, 99, 104);      // 次要文字
     
     // UI组件
     private JComboBox<String> deviceComboBox;
@@ -67,14 +79,22 @@ public class AndroidAppManager extends JFrame {
      * 初始化UI界面
      */
     private void initializeUI() {
-        setTitle("Android应用管理工具 - 双用户视图");
+        setTitle("📱 Android应用管理工具 - 慧兜兜专用版");
         setSize(1400, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
+        // 设置窗口图标（如果有的话）
+        try {
+            setIconImage(createPlaceholderIcon());
+        } catch (Exception e) {
+            // 忽略图标设置错误
+        }
+        
         // 主面板
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        mainPanel.setBackground(BACKGROUND_COLOR);
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         
         // 顶部控制面板
         JPanel topPanel = createTopPanel();
@@ -85,8 +105,13 @@ public class AndroidAppManager extends JFrame {
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         
         // 底部状态栏
-        statusLabel = new JLabel("就绪 | 提示：右键点击应用可进行操作");
-        statusLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        statusLabel = new JLabel("✨ 就绪 | 💡 提示：右键点击应用可进行操作");
+        statusLabel.setFont(new Font("微软雅黑", Font.PLAIN, 13));
+        statusLabel.setForeground(TEXT_SECONDARY);
+        statusLabel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(232, 234, 237)),
+            BorderFactory.createEmptyBorder(10, 5, 10, 5)
+        ));
         mainPanel.add(statusLabel, BorderLayout.SOUTH);
         
         add(mainPanel);
@@ -97,26 +122,92 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
+     * 创建占位图标
+     */
+    private Image createPlaceholderIcon() {
+        int size = 32;
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = image.createGraphics();
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        
+        // 绘制圆形背景
+        g2d.setColor(PRIMARY_COLOR);
+        g2d.fillOval(2, 2, size - 4, size - 4);
+        
+        // 绘制Android机器人简图
+        g2d.setColor(Color.WHITE);
+        g2d.setStroke(new BasicStroke(2));
+        g2d.drawOval(10, 8, 12, 10);  // 头部
+        g2d.drawRect(8, 18, 16, 10);  // 身体
+        
+        g2d.dispose();
+        return image;
+    }
+    
+    /**
      * 创建顶部控制面板
      */
     private JPanel createTopPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("设备选择"));
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 8));
+        panel.setBackground(CARD_COLOR);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(232, 234, 237), 1),
+            BorderFactory.createEmptyBorder(12, 15, 12, 15)
+        ));
         
-        panel.add(new JLabel("选择设备:"));
+        // 设备选择标签
+        JLabel deviceLabel = new JLabel("📱 选择设备:");
+        deviceLabel.setFont(new Font("微软雅黑", Font.BOLD, 13));
+        deviceLabel.setForeground(TEXT_PRIMARY);
+        panel.add(deviceLabel);
+        
+        // 设备下拉框
         deviceComboBox = new JComboBox<>();
-        deviceComboBox.setPreferredSize(new Dimension(300, 25));
+        deviceComboBox.setPreferredSize(new Dimension(300, 32));
+        deviceComboBox.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        deviceComboBox.setBackground(Color.WHITE);
         panel.add(deviceComboBox);
         
-        refreshButton = new JButton("🔄 刷新设备");
+        // 刷新按钮
+        refreshButton = createStyledButton("🔄 刷新设备", PRIMARY_COLOR);
         refreshButton.addActionListener(e -> loadDevices());
         panel.add(refreshButton);
         
-        JButton loadAppsButton = new JButton("📱 加载应用");
+        // 加载应用按钮
+        JButton loadAppsButton = createStyledButton("📋 加载应用", SUCCESS_COLOR);
         loadAppsButton.addActionListener(e -> loadApps());
         panel.add(loadAppsButton);
         
         return panel;
+    }
+    
+    /**
+     * 创建美化按钮
+     */
+    private JButton createStyledButton(String text, Color bgColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("微软雅黑", Font.BOLD, 12));
+        button.setForeground(Color.WHITE);
+        button.setBackground(bgColor);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(120, 32));
+        
+        // 鼠标悬停效果
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(bgColor.brighter());
+            }
+            
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(bgColor);
+            }
+        });
+        
+        return button;
     }
     
     /**
@@ -141,7 +232,20 @@ public class AndroidAppManager extends JFrame {
      */
     private JPanel createUserPanel(String title, boolean isUser0) {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder(title));
+        panel.setBackground(CARD_COLOR);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(232, 234, 237), 1),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
+        
+        // 标题面板
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        titlePanel.setBackground(CARD_COLOR);
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("微软雅黑", Font.BOLD, 14));
+        titleLabel.setForeground(isUser0 ? PRIMARY_COLOR : new Color(156, 39, 176)); // 主用户蓝色，其他用户紫色
+        titlePanel.add(titleLabel);
+        panel.add(titlePanel, BorderLayout.NORTH);
         
         // 表格模型
         String[] columns = {"包名", "类型"};
@@ -165,9 +269,8 @@ public class AndroidAppManager extends JFrame {
             otherUserTable = table;
         }
         
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.setRowHeight(25);
-        table.getTableHeader().setReorderingAllowed(false);
+        // 美化表格
+        setupStyledTable(table, isUser0);
         
         // 添加右键菜单
         addContextMenu(table, isUser0);
@@ -183,16 +286,69 @@ public class AndroidAppManager extends JFrame {
         });
         
         JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(232, 234, 237)));
+        scrollPane.getViewport().setBackground(Color.WHITE);
         panel.add(scrollPane, BorderLayout.CENTER);
         
         // 底部提示
         JLabel hintLabel = new JLabel("💡 右键或双击应用进行操作");
         hintLabel.setHorizontalAlignment(SwingConstants.CENTER);
         hintLabel.setFont(new Font("微软雅黑", Font.PLAIN, 11));
-        hintLabel.setForeground(Color.GRAY);
+        hintLabel.setForeground(TEXT_SECONDARY);
+        hintLabel.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
         panel.add(hintLabel, BorderLayout.SOUTH);
         
         return panel;
+    }
+    
+    /**
+     * 设置表格样式
+     */
+    private void setupStyledTable(JTable table, boolean isUser0) {
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        table.setRowHeight(28);
+        table.getTableHeader().setReorderingAllowed(false);
+        table.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        table.setGridColor(new Color(232, 234, 237));
+        table.setShowGrid(true);
+        table.setIntercellSpacing(new Dimension(0, 0));
+        
+        // 表头样式
+        table.getTableHeader().setFont(new Font("微软雅黑", Font.BOLD, 12));
+        table.getTableHeader().setBackground(isUser0 ? 
+            new Color(227, 242, 253) : new Color(243, 229, 245));
+        table.getTableHeader().setForeground(TEXT_PRIMARY);
+        table.getTableHeader().setPreferredSize(new Dimension(0, 35));
+        
+        // 选中行样式
+        table.setSelectionBackground(new Color(232, 240, 254));
+        table.setSelectionForeground(TEXT_PRIMARY);
+        
+        // 自定义单元格渲染器
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, 
+                    isSelected, hasFocus, row, column);
+                
+                if (!isSelected) {
+                    // 交替行颜色
+                    setBackground(row % 2 == 0 ? Color.WHITE : new Color(250, 250, 250));
+                    
+                    // huidoudour应用特殊标记
+                    if (column == 1 && value != null && value.toString().contains("⭐")) {
+                        setForeground(new Color(255, 152, 0)); // 橙色
+                        setFont(getFont().deriveFont(Font.BOLD));
+                    } else {
+                        setForeground(TEXT_PRIMARY);
+                        setFont(getFont().deriveFont(Font.PLAIN));
+                    }
+                }
+                
+                return c;
+            }
+        });
     }
     
     /**
@@ -200,8 +356,10 @@ public class AndroidAppManager extends JFrame {
      */
     private void addContextMenu(JTable table, boolean isUser0) {
         JPopupMenu popupMenu = new JPopupMenu();
+        popupMenu.setFont(new Font("微软雅黑", Font.PLAIN, 12));
         
-        JMenuItem uninstallItem = new JMenuItem("🗑️ 卸载应用");
+        // 卸载应用
+        JMenuItem uninstallItem = createMenuItem("🗑️ 卸载应用", "完全卸载此应用");
         uninstallItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -210,7 +368,8 @@ public class AndroidAppManager extends JFrame {
         });
         popupMenu.add(uninstallItem);
         
-        JMenuItem clearDataItem = new JMenuItem("🧹 清除数据");
+        // 清除数据
+        JMenuItem clearDataItem = createMenuItem("🧹 清除数据", "清除所有应用数据（包括登录信息）");
         clearDataItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -219,7 +378,8 @@ public class AndroidAppManager extends JFrame {
         });
         popupMenu.add(clearDataItem);
         
-        JMenuItem clearCacheItem = new JMenuItem("📦 清除缓存");
+        // 清除缓存
+        JMenuItem clearCacheItem = createMenuItem("📦 清除缓存", "清除应用缓存文件");
         clearCacheItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -230,18 +390,29 @@ public class AndroidAppManager extends JFrame {
         
         popupMenu.addSeparator();
         
-        JMenuItem copyPackageItem = new JMenuItem("📋 复制包名");
+        // 复制包名
+        JMenuItem copyPackageItem = createMenuItem("📋 复制包名", "复制包名到剪贴板");
         copyPackageItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
                     new java.awt.datatransfer.StringSelection(app.packageName), null);
-                setStatus("已复制包名: " + app.packageName);
+                setStatus("✅ 已复制包名: " + app.packageName);
             }
         });
         popupMenu.add(copyPackageItem);
         
         table.setComponentPopupMenu(popupMenu);
+    }
+    
+    /**
+     * 创建菜单项
+     */
+    private JMenuItem createMenuItem(String text, String tooltip) {
+        JMenuItem item = new JMenuItem(text);
+        item.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        item.setToolTipText(tooltip);
+        return item;
     }
     
     /**
@@ -253,29 +424,38 @@ public class AndroidAppManager extends JFrame {
             return;
         }
         
-        String[] options = {"卸载应用", "清除数据", "清除缓存", "取消"};
-        int choice = JOptionPane.showOptionDialog(
-            this,
-            "选择对 \"" + app.packageName + "\" 的操作：",
-            "应用操作",
-            JOptionPane.DEFAULT_OPTION,
-            JOptionPane.QUESTION_MESSAGE,
-            null,
-            options,
-            options[0]
-        );
+        // 创建美化面板
+        JPanel panel = new JPanel(new GridLayout(3, 1, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        switch (choice) {
-            case 0:
-                uninstallApp(app);
-                break;
-            case 1:
-                clearData(app);
-                break;
-            case 2:
-                clearCache(app);
-                break;
-        }
+        JButton uninstallBtn = createStyledButton("🗑️ 卸载应用", DANGER_COLOR);
+        uninstallBtn.setPreferredSize(new Dimension(200, 40));
+        uninstallBtn.addActionListener(e -> {
+            uninstallApp(app);
+        });
+        
+        JButton clearDataBtn = createStyledButton("🧹 清除数据", WARNING_COLOR);
+        clearDataBtn.setPreferredSize(new Dimension(200, 40));
+        clearDataBtn.addActionListener(e -> {
+            clearData(app);
+        });
+        
+        JButton clearCacheBtn = createStyledButton("📦 清除缓存", PRIMARY_COLOR);
+        clearCacheBtn.setPreferredSize(new Dimension(200, 40));
+        clearCacheBtn.addActionListener(e -> {
+            clearCache(app);
+        });
+        
+        panel.add(uninstallBtn);
+        panel.add(clearDataBtn);
+        panel.add(clearCacheBtn);
+        
+        JOptionPane.showMessageDialog(
+            this,
+            panel,
+            "选择对 \"" + app.packageName + "\" 的操作",
+            JOptionPane.QUESTION_MESSAGE
+        );
     }
     
     /**
@@ -491,10 +671,34 @@ public class AndroidAppManager extends JFrame {
      * 卸载应用
      */
     private void uninstallApp(AppInfo app) {
+        String device = (String) deviceComboBox.getSelectedItem();
+        if (device == null || "未检测到设备".equals(device)) {
+            showWarning("请先选择有效的设备");
+            return;
+        }
+        
+        // 智能卸载逻辑
+        String confirmMessage;
+        String adbCommand;
+        
+        if (app.userId == 0) {
+            // 主用户0的应用：为所有用户卸载
+            confirmMessage = "⚠️ 这是主用户（用户0）的应用\n\n" +
+                           "确定要为【所有用户】卸载应用 \"" + app.packageName + "\" 吗？\n" +
+                           "此操作将从所有用户空间中删除该应用，不可恢复！";
+            adbCommand = "adb -s " + device + " uninstall " + app.packageName;
+        } else {
+            // 非主用户的应用：仅卸载当前用户
+            confirmMessage = "ℹ️ 这是用户 " + app.userId + " 的应用\n\n" +
+                           "确定要仅为【用户" + app.userId + "】卸载应用 \"" + app.packageName + "\" 吗？\n" +
+                           "其他用户的应用将不受影响。";
+            adbCommand = "adb -s " + device + " shell pm uninstall --user " + app.userId + " " + app.packageName;
+        }
+        
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
-            "确定要卸载应用 \"" + app.packageName + "\" 吗？\n此操作不可恢复！",
+            confirmMessage,
             "确认卸载",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE
@@ -504,18 +708,10 @@ public class AndroidAppManager extends JFrame {
             return;
         }
         
-        String device = (String) deviceComboBox.getSelectedItem();
-        if (device == null || "未检测到设备".equals(device)) {
-            showWarning("请先选择有效的设备");
-            return;
-        }
-        
         setStatus("正在卸载应用...");
         
         try {
-            Process process = Runtime.getRuntime().exec(
-                new String[]{"adb", "-s", device, "uninstall", app.packageName}
-            );
+            Process process = Runtime.getRuntime().exec(adbCommand);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
             StringBuilder output = new StringBuilder();
@@ -529,7 +725,10 @@ public class AndroidAppManager extends JFrame {
             
             String result = output.toString();
             if (result.contains("Success")) {
-                showSuccess("应用卸载成功！");
+                String successMsg = app.userId == 0 ? 
+                    "✅ 应用已从所有用户中卸载成功！" : 
+                    "✅ 应用已从用户" + app.userId + "中卸载成功！";
+                showSuccess(successMsg);
                 loadApps();
             } else {
                 showError("卸载失败: " + result);
@@ -545,10 +744,18 @@ public class AndroidAppManager extends JFrame {
      * 清除应用数据
      */
     private void clearData(AppInfo app) {
+        String device = (String) deviceComboBox.getSelectedItem();
+        if (device == null || "未检测到设备".equals(device)) {
+            showWarning("请先选择有效的设备");
+            return;
+        }
+        
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
-            "确定要清除应用 \"" + app.packageName + "\" 的所有数据吗？\n包括登录信息、设置等，此操作不可恢复！",
+            "⚠️ 警告：此操作不可恢复！\n\n" +
+            "确定要清除用户" + app.userId + "的应用 \"" + app.packageName + "\" 的所有数据吗？\n" +
+            "包括：登录信息、设置、本地文件等",
             "确认清除数据",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE
@@ -558,17 +765,11 @@ public class AndroidAppManager extends JFrame {
             return;
         }
         
-        String device = (String) deviceComboBox.getSelectedItem();
-        if (device == null || "未检测到设备".equals(device)) {
-            showWarning("请先选择有效的设备");
-            return;
-        }
-        
         setStatus("正在清除应用数据...");
         
         try {
             Process process = Runtime.getRuntime().exec(
-                new String[]{"adb", "-s", device, "shell", "pm", "clear", app.packageName}
+                new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName}
             );
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
@@ -583,7 +784,7 @@ public class AndroidAppManager extends JFrame {
             
             String result = output.toString();
             if (result.contains("Success") || result.contains("success")) {
-                showSuccess("应用数据清除成功！");
+                showSuccess("✅ 用户" + app.userId + "的应用数据清除成功！");
             } else {
                 showError("清除数据失败: " + result);
             }
@@ -598,10 +799,17 @@ public class AndroidAppManager extends JFrame {
      * 清除应用缓存
      */
     private void clearCache(AppInfo app) {
+        String device = (String) deviceComboBox.getSelectedItem();
+        if (device == null || "未检测到设备".equals(device)) {
+            showWarning("请先选择有效的设备");
+            return;
+        }
+        
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
-            "确定要清除应用 \"" + app.packageName + "\" 的缓存吗？",
+            "确定要清除用户" + app.userId + "的应用 \"" + app.packageName + "\" 的缓存吗？\n\n" +
+            "注意：当前ADB版本会同时清除应用数据",
             "确认清除缓存",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.QUESTION_MESSAGE
@@ -611,17 +819,11 @@ public class AndroidAppManager extends JFrame {
             return;
         }
         
-        String device = (String) deviceComboBox.getSelectedItem();
-        if (device == null || "未检测到设备".equals(device)) {
-            showWarning("请先选择有效的设备");
-            return;
-        }
-        
         setStatus("正在清除应用缓存...");
         
         try {
             Process process = Runtime.getRuntime().exec(
-                new String[]{"adb", "-s", device, "shell", "pm", "clear", app.packageName}
+                new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName}
             );
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
@@ -636,7 +838,7 @@ public class AndroidAppManager extends JFrame {
             
             String result = output.toString();
             if (result.contains("Success") || result.contains("success")) {
-                showSuccess("应用缓存清除成功！\n注意：此操作也会清除应用数据");
+                showSuccess("✅ 用户" + app.userId + "的应用缓存清除成功！\n注意：此操作也会清除应用数据");
             } else {
                 showError("清除缓存失败: " + result);
             }
@@ -663,11 +865,11 @@ public class AndroidAppManager extends JFrame {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(
                 this,
-                message,
-                "错误",
+                "❌ " + message,
+                "操作失败",
                 JOptionPane.ERROR_MESSAGE
             );
-            setStatus("操作失败");
+            setStatus("❌ 操作失败");
         });
     }
     
@@ -678,7 +880,7 @@ public class AndroidAppManager extends JFrame {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(
                 this,
-                message,
+                "⚠️ " + message,
                 "警告",
                 JOptionPane.WARNING_MESSAGE
             );
@@ -693,10 +895,10 @@ public class AndroidAppManager extends JFrame {
             JOptionPane.showMessageDialog(
                 this,
                 message,
-                "成功",
+                "操作成功",
                 JOptionPane.INFORMATION_MESSAGE
             );
-            setStatus("操作成功");
+            setStatus("✅ 操作成功");
         });
     }
     
