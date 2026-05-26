@@ -22,12 +22,28 @@ jobs:
         run: |
           echo "Checking for Java file changes..."
           
-          # 获取当前提交和上次提交的差异
-          if [ ${{ github.event.before }} != "0000000000000000000000000000000000000000" ]; then
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          # 验证 before commit 是否存在（处理强制推送情况）
+          BEFORE_COMMIT="${{ github.event.before }}"
+          CURRENT_COMMIT="${{ github.sha }}"
+          
+          if [ "$BEFORE_COMMIT" = "0000000000000000000000000000000000000000" ]; then
+            # 首次提交，检查所有文件
+            echo "First commit detected, checking all files..."
+            CHANGED_FILES=$(git ls-tree -r --name-only HEAD || true)
+          elif git cat-file -e "$BEFORE_COMMIT" 2>/dev/null; then
+            # before commit 存在，正常比对
+            echo "Comparing $BEFORE_COMMIT to $CURRENT_COMMIT..."
+            CHANGED_FILES=$(git diff --name-only "$BEFORE_COMMIT" "$CURRENT_COMMIT" || true)
           else
-            # 如果是首次提交，检查所有文件
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            # before commit 不存在（强制推送），回退到 HEAD~1
+            echo "Before commit not found (force push detected), falling back to HEAD~1..."
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || true)
+            else
+              # 只有一个 commit，列出所有文件
+              echo "Only one commit exists, listing all files..."
+              CHANGED_FILES=$(git ls-tree -r --name-only HEAD || true)
+            fi
           fi
           
           echo "Changed files:"
