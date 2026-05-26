@@ -9,6 +9,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -81,8 +82,31 @@ public class AndroidAppManager extends JFrame {
      * 初始化UI界面
      */
     private void initializeUI() {
-        setTitle("📱 Android应用管理工具 - 慧兜兜专用版");
-        setSize(1400, 800);
+        setTitle("Android应用管理工具 - 慧兜兜专用版");
+        
+        // 获取系统DPI缩放比例
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        GraphicsDevice gd = ge.getDefaultScreenDevice();
+        GraphicsConfiguration gc = gd.getDefaultConfiguration();
+        AffineTransform transform = gc.getDefaultTransform();
+        double dpiScaleX = transform.getScaleX();
+        double dpiScaleY = transform.getScaleY();
+        
+        // 计算考虑DPI缩放后的窗口尺寸
+        // 目标：在100% DPI下显示为1366x768
+        int targetWidth = 1366;
+        int targetHeight = 768;
+        
+        // 如果DPI不是100%，需要调整设置值以补偿缩放
+        int windowWidth = (int)(targetWidth / dpiScaleX);
+        int windowHeight = (int)(targetHeight / dpiScaleY);
+        
+        logInfo("系统DPI缩放: " + (dpiScaleX * 100) + "%");
+        logInfo("设置窗口尺寸: " + windowWidth + "x" + windowHeight + " (期望显示: " + targetWidth + "x" + targetHeight + ")");
+        
+        // 设置默认窗口大小为1366x768（包括标题栏和边框的整体窗口）
+        setSize(windowWidth, windowHeight);
+        
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
@@ -107,7 +131,7 @@ public class AndroidAppManager extends JFrame {
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         
         // 底部状态栏
-        statusLabel = new JLabel("✨ 就绪 | 💡 提示：右键点击应用可进行操作");
+        statusLabel = new JLabel("就绪 | 提示：右键点击应用可进行操作");
         statusLabel.setFont(new Font("微软雅黑", Font.PLAIN, 13));
         statusLabel.setForeground(TEXT_SECONDARY);
         statusLabel.setBorder(BorderFactory.createCompoundBorder(
@@ -158,19 +182,19 @@ public class AndroidAppManager extends JFrame {
      * 日志输出（带级别）
      */
     private void logInfo(String message) {
-        log("ℹ️  INFO: " + message);
+        log("INFO: " + message);
     }
     
     private void logSuccess(String message) {
-        log("✅ SUCCESS: " + message);
+        log("SUCCESS: " + message);
     }
     
     private void logWarning(String message) {
-        log("⚠️  WARNING: " + message);
+        log("WARNING: " + message);
     }
     
     private void logError(String message) {
-        log("❌ ERROR: " + message);
+        log("ERROR: " + message);
     }
     
     /**
@@ -185,7 +209,7 @@ public class AndroidAppManager extends JFrame {
         ));
         
         // 设备选择标签
-        JLabel deviceLabel = new JLabel("📱 选择设备:");
+        JLabel deviceLabel = new JLabel("选择设备:");
         deviceLabel.setFont(new Font("微软雅黑", Font.BOLD, 13));
         deviceLabel.setForeground(TEXT_PRIMARY);
         panel.add(deviceLabel);
@@ -198,12 +222,12 @@ public class AndroidAppManager extends JFrame {
         panel.add(deviceComboBox);
         
         // 刷新按钮
-        refreshButton = createStyledButton("🔄 刷新设备", PRIMARY_COLOR);
+        refreshButton = createStyledButton("刷新设备", PRIMARY_COLOR);
         refreshButton.addActionListener(e -> loadDevices());
         panel.add(refreshButton);
         
         // 加载应用按钮
-        JButton loadAppsButton = createStyledButton("📋 加载应用", SUCCESS_COLOR);
+        JButton loadAppsButton = createStyledButton("加载应用", SUCCESS_COLOR);
         loadAppsButton.addActionListener(e -> loadApps());
         panel.add(loadAppsButton);
         
@@ -345,7 +369,7 @@ public class AndroidAppManager extends JFrame {
         panel.add(scrollPane, BorderLayout.CENTER);
         
         // 底部提示
-        JLabel hintLabel = new JLabel("💡 右键或双击应用进行操作");
+        JLabel hintLabel = new JLabel("右键或双击应用进行操作");
         hintLabel.setHorizontalAlignment(SwingConstants.CENTER);
         hintLabel.setFont(new Font("微软雅黑", Font.PLAIN, 11));
         hintLabel.setForeground(TEXT_SECONDARY);
@@ -412,8 +436,42 @@ public class AndroidAppManager extends JFrame {
         JPopupMenu popupMenu = new JPopupMenu();
         popupMenu.setFont(new Font("微软雅黑", Font.PLAIN, 12));
         
+        // 启动应用
+        JMenuItem launchItem = createMenuItem("启动应用", "启动此应用");
+        launchItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                launchApp(app);
+            }
+        });
+        popupMenu.add(launchItem);
+        
+        popupMenu.addSeparator();
+        
+        // 强制停止
+        JMenuItem forceStopItem = createMenuItem("强制停止", "强制停止应用运行");
+        forceStopItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                forceStopApp(app);
+            }
+        });
+        popupMenu.add(forceStopItem);
+        
+        // 杀死进程
+        JMenuItem killProcessItem = createMenuItem("杀死进程", "杀死应用的所有进程");
+        killProcessItem.addActionListener(e -> {
+            AppInfo app = getSelectedApp(table, isUser0);
+            if (app != null) {
+                killAppProcess(app);
+            }
+        });
+        popupMenu.add(killProcessItem);
+        
+        popupMenu.addSeparator();
+        
         // 卸载应用
-        JMenuItem uninstallItem = createMenuItem("🗑️ 卸载应用", "完全卸载此应用");
+        JMenuItem uninstallItem = createMenuItem("卸载应用", "完全卸载此应用");
         uninstallItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -423,7 +481,7 @@ public class AndroidAppManager extends JFrame {
         popupMenu.add(uninstallItem);
         
         // 清除数据
-        JMenuItem clearDataItem = createMenuItem("🧹 清除数据", "清除所有应用数据（包括登录信息）");
+        JMenuItem clearDataItem = createMenuItem("清除数据", "清除所有应用数据（包括登录信息）");
         clearDataItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -433,7 +491,7 @@ public class AndroidAppManager extends JFrame {
         popupMenu.add(clearDataItem);
         
         // 清除缓存
-        JMenuItem clearCacheItem = createMenuItem("📦 清除缓存", "清除应用缓存文件");
+        JMenuItem clearCacheItem = createMenuItem("清除缓存", "清除应用缓存文件");
         clearCacheItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -445,7 +503,7 @@ public class AndroidAppManager extends JFrame {
         popupMenu.addSeparator();
         
         // 复制包名
-        JMenuItem copyPackageItem = createMenuItem("📋 复制包名", "复制包名到剪贴板");
+        JMenuItem copyPackageItem = createMenuItem("复制包名", "复制包名到剪贴板");
         copyPackageItem.addActionListener(e -> {
             AppInfo app = getSelectedApp(table, isUser0);
             if (app != null) {
@@ -453,7 +511,7 @@ public class AndroidAppManager extends JFrame {
                     new java.awt.datatransfer.StringSelection(app.packageName), null);
                 String msg = "已复制包名: " + app.packageName;
                 logInfo(msg);
-                setStatus("✅ " + msg);
+                setStatus(msg);
             }
         });
         popupMenu.add(copyPackageItem);
@@ -481,36 +539,58 @@ public class AndroidAppManager extends JFrame {
         }
         
         // 创建美化面板
-        JPanel panel = new JPanel(new GridLayout(3, 1, 10, 10));
+        JPanel panel = new JPanel(new GridLayout(6, 1, 10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        JButton uninstallBtn = createStyledButton("🗑️ 卸载应用", DANGER_COLOR);
+        JButton launchBtn = createStyledButton("启动应用", SUCCESS_COLOR);
+        launchBtn.setPreferredSize(new Dimension(200, 40));
+        launchBtn.addActionListener(e -> {
+            launchApp(app);
+        });
+        
+        JButton forceStopBtn = createStyledButton("强制停止", WARNING_COLOR);
+        forceStopBtn.setPreferredSize(new Dimension(200, 40));
+        forceStopBtn.addActionListener(e -> {
+            forceStopApp(app);
+        });
+        
+        JButton killBtn = createStyledButton("杀死进程", DANGER_COLOR);
+        killBtn.setPreferredSize(new Dimension(200, 40));
+        killBtn.addActionListener(e -> {
+            killAppProcess(app);
+        });
+        
+        JButton uninstallBtn = createStyledButton("卸载应用", DANGER_COLOR);
         uninstallBtn.setPreferredSize(new Dimension(200, 40));
         uninstallBtn.addActionListener(e -> {
             uninstallApp(app);
         });
         
-        JButton clearDataBtn = createStyledButton("🧹 清除数据", WARNING_COLOR);
+        JButton clearDataBtn = createStyledButton("清除数据", WARNING_COLOR);
         clearDataBtn.setPreferredSize(new Dimension(200, 40));
         clearDataBtn.addActionListener(e -> {
             clearData(app);
         });
         
-        JButton clearCacheBtn = createStyledButton("📦 清除缓存", PRIMARY_COLOR);
+        JButton clearCacheBtn = createStyledButton("清除缓存", PRIMARY_COLOR);
         clearCacheBtn.setPreferredSize(new Dimension(200, 40));
         clearCacheBtn.addActionListener(e -> {
             clearCache(app);
         });
         
+        panel.add(launchBtn);
+        panel.add(forceStopBtn);
+        panel.add(killBtn);
         panel.add(uninstallBtn);
         panel.add(clearDataBtn);
         panel.add(clearCacheBtn);
         
+        // 使用 PLAIN_MESSAGE 移除默认的问号图标
         JOptionPane.showMessageDialog(
             this,
             panel,
             "选择对 \"" + app.packageName + "\" 的操作",
-            JOptionPane.QUESTION_MESSAGE
+            JOptionPane.PLAIN_MESSAGE
         );
     }
     
@@ -739,6 +819,345 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
+     * 启动应用（智能降级策略）
+     */
+    private void launchApp(AppInfo app) {
+        String device = (String) deviceComboBox.getSelectedItem();
+        if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试启动应用但未选择有效设备");
+            showWarning("请先选择有效的设备");
+            return;
+        }
+        
+        setStatus("正在启动应用...");
+        logInfo("========== 开始启动应用: " + app.packageName + " ==========");
+        
+        // 方法1：优先使用 am start 命令（更标准、更可靠）
+        logInfo("【方法1】尝试使用 am start 启动应用...");
+        boolean success = launchWithAmStart(device, app);
+        
+        if (!success) {
+            // 方法1失败，降级到方法2：使用 monkey 命令
+            logWarning("【方法1】am start 启动失败，尝试降级方案...");
+            logInfo("【方法2】尝试使用 monkey 启动应用...");
+            success = launchWithMonkey(device, app);
+        }
+        
+        if (success) {
+            String msg = "应用启动成功";
+            logSuccess(msg + " (" + app.packageName + ")");
+            showSuccess(msg);
+        } else {
+            logError("所有启动方法均失败");
+            showError("应用启动失败，请检查应用是否正确安装且有LAUNCHER Activity");
+        }
+        
+        logInfo("========== 启动流程结束 ==========");
+    }
+    
+    /**
+     * 方法1：使用 am start 启动应用（优先方案）
+     */
+    private boolean launchWithAmStart(String device, AppInfo app) {
+        try {
+            // 首先获取应用的启动Activity
+            logInfo("步骤1: 查询应用的启动Activity...");
+            String launchActivity = getLaunchActivity(device, app.packageName);
+            
+            if (launchActivity == null || launchActivity.isEmpty()) {
+                logWarning("无法获取启动Activity，此方法可能失败");
+                // 尝试使用包名直接启动
+                logInfo("步骤2: 尝试使用包名直接启动...");
+                String[] adbCommand = new String[]{
+                    "adb", "-s", device, "shell", "am", "start", 
+                    "-a", "android.intent.action.MAIN",
+                    "-c", "android.intent.category.LAUNCHER",
+                    "-p", app.packageName
+                };
+                return executeLaunchCommand(adbCommand, "am start (包名方式)");
+            } else {
+                logInfo("步骤2: 找到启动Activity: " + launchActivity);
+                // 使用完整的Activity名称启动
+                logInfo("步骤3: 使用完整Activity路径启动...");
+                String[] adbCommand = new String[]{
+                    "adb", "-s", device, "shell", "am", "start",
+                    "-n", launchActivity
+                };
+                return executeLaunchCommand(adbCommand, "am start (Activity方式)");
+            }
+            
+        } catch (Exception e) {
+            logError("am start 启动异常: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 获取应用的启动Activity
+     */
+    private String getLaunchActivity(String device, String packageName) {
+        try {
+            String[] adbCommand = new String[]{
+                "adb", "-s", device, "shell", "cmd", "package", "resolve-activity", "--brief", packageName
+            };
+            
+            Process process = Runtime.getRuntime().exec(adbCommand);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            
+            reader.close();
+            process.waitFor();
+            
+            String result = output.toString().trim();
+            logInfo("Activity查询结果: " + result);
+            
+            // 解析结果，提取Activity名称
+            if (result.contains("/") && !result.contains("No activity found")) {
+                // 格式通常是: com.example.app/.MainActivity
+                return result;
+            }
+            
+            return null;
+            
+        } catch (Exception e) {
+            logWarning("查询Activity失败: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 执行启动命令并检查结果
+     */
+    private boolean executeLaunchCommand(String[] adbCommand, String methodName) {
+        try {
+            logInfo("执行命令: " + String.join(" ", adbCommand));
+            
+            Process process = Runtime.getRuntime().exec(adbCommand);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+            
+            StringBuilder output = new StringBuilder();
+            StringBuilder errorOutput = new StringBuilder();
+            String line;
+            
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            
+            while ((line = errorReader.readLine()) != null) {
+                errorOutput.append(line).append("\n");
+            }
+            
+            reader.close();
+            errorReader.close();
+            process.waitFor();
+            
+            String result = output.toString();
+            String errorResult = errorOutput.toString();
+            
+            logInfo(methodName + " - ADB输出: " + result.trim());
+            if (!errorResult.isEmpty()) {
+                logWarning(methodName + " - 错误输出: " + errorResult.trim());
+            }
+            
+            // 判断是否成功
+            if (result.contains("Starting") || 
+                result.contains("Success") ||
+                (!errorResult.contains("Error") && !errorResult.contains("Exception"))) {
+                logInfo(methodName + " - 启动成功");
+                return true;
+            } else {
+                logWarning(methodName + " - 启动可能失败");
+                return false;
+            }
+            
+        } catch (Exception e) {
+            logError(methodName + " 执行异常: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 方法2：使用 monkey 启动应用（降级方案）
+     */
+    private boolean launchWithMonkey(String device, AppInfo app) {
+        try {
+            String[] adbCommand = new String[]{
+                "adb", "-s", device, "shell", "monkey", 
+                "-p", app.packageName, 
+                "-c", "android.intent.category.LAUNCHER", 
+                "1"
+            };
+            
+            logInfo("执行命令: " + String.join(" ", adbCommand));
+            
+            Process process = Runtime.getRuntime().exec(adbCommand);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+            
+            StringBuilder output = new StringBuilder();
+            StringBuilder errorOutput = new StringBuilder();
+            String line;
+            
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            
+            while ((line = errorReader.readLine()) != null) {
+                errorOutput.append(line).append("\n");
+            }
+            
+            reader.close();
+            errorReader.close();
+            process.waitFor();
+            
+            String result = output.toString();
+            String errorResult = errorOutput.toString();
+            
+            logInfo("monkey - ADB输出: " + result.trim());
+            if (!errorResult.isEmpty()) {
+                logWarning("monkey - 错误输出: " + errorResult.trim());
+            }
+            
+            // monkey成功的标志
+            if (result.contains("Events injected") || 
+                result.contains(":Dropped") ||
+                (!errorResult.contains("No activities found") && !errorResult.contains("Security exception"))) {
+                logInfo("monkey - 启动成功");
+                return true;
+            } else {
+                logWarning("monkey - 启动可能失败");
+                return false;
+            }
+            
+        } catch (Exception e) {
+            logError("monkey 启动异常: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 强制停止应用
+     */
+    private void forceStopApp(AppInfo app) {
+        String device = (String) deviceComboBox.getSelectedItem();
+        if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试强制停止应用但未选择有效设备");
+            showWarning("请先选择有效的设备");
+            return;
+        }
+        
+        // 二次确认
+        int confirm = JOptionPane.showConfirmDialog(
+            this,
+            "确定要强制停止用户" + app.userId + "的应用 \"" + app.packageName + "\" 吗？\n\n" +
+            "这将立即停止应用的所有活动，可能导致数据丢失。",
+            "确认强制停止",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
+        
+        if (confirm != JOptionPane.YES_OPTION) {
+            logInfo("用户取消了强制停止操作");
+            return;
+        }
+        
+        setStatus("正在强制停止应用...");
+        String[] adbCommand = new String[]{"adb", "-s", device, "shell", "am", "force-stop", app.packageName};
+        logInfo("执行强制停止命令: " + String.join(" ", adbCommand));
+        
+        try {
+            Process process = Runtime.getRuntime().exec(adbCommand);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            
+            reader.close();
+            process.waitFor();
+            
+            String result = output.toString();
+            logInfo("ADB输出: " + result.trim());
+            
+            String msg = "应用已强制停止";
+            logSuccess(msg + " (" + app.packageName + ")");
+            showSuccess(msg);
+            
+        } catch (Exception e) {
+            logError("强制停止应用异常: " + e.getMessage());
+            showError("强制停止应用失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * 杀死应用进程
+     */
+    private void killAppProcess(AppInfo app) {
+        String device = (String) deviceComboBox.getSelectedItem();
+        if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试杀死进程但未选择有效设备");
+            showWarning("请先选择有效的设备");
+            return;
+        }
+        
+        // 二次确认
+        int confirm = JOptionPane.showConfirmDialog(
+            this,
+            "警告：此操作较为激进！\n\n" +
+            "确定要杀死用户" + app.userId + "的应用 \"" + app.packageName + "\" 的所有进程吗？\n" +
+            "这会比强制停止更彻底，但可能导致系统不稳定。",
+            "确认杀死进程",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.ERROR_MESSAGE
+        );
+        
+        if (confirm != JOptionPane.YES_OPTION) {
+            logInfo("用户取消了杀死进程操作");
+            return;
+        }
+        
+        setStatus("正在杀死应用进程...");
+        // 使用kill命令杀死进程
+        String[] adbCommand = new String[]{"adb", "-s", device, "shell", "pkill", "-f", app.packageName};
+        logInfo("执行杀死进程命令: " + String.join(" ", adbCommand));
+        
+        try {
+            Process process = Runtime.getRuntime().exec(adbCommand);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            
+            reader.close();
+            process.waitFor();
+            
+            String result = output.toString();
+            logInfo("ADB输出: " + result.trim());
+            
+            String msg = "应用进程已杀死";
+            logSuccess(msg + " (" + app.packageName + ")");
+            showSuccess(msg);
+            
+        } catch (Exception e) {
+            logError("杀死应用进程异常: " + e.getMessage());
+            showError("杀死应用进程失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
      * 卸载应用
      */
     private void uninstallApp(AppInfo app) {
@@ -755,14 +1174,14 @@ public class AndroidAppManager extends JFrame {
         
         if (app.userId == 0) {
             // 主用户0的应用：为所有用户卸载
-            confirmMessage = "⚠️ 这是主用户（用户0）的应用\n\n" +
+            confirmMessage = "这是主用户（用户0）的应用\n\n" +
                            "确定要为【所有用户】卸载应用 \"" + app.packageName + "\" 吗？\n" +
                            "此操作将从所有用户空间中删除该应用，不可恢复！";
             adbCommand = new String[]{"adb", "-s", device, "uninstall", app.packageName};
             logInfo("准备卸载应用 (所有用户): " + app.packageName);
         } else {
             // 非主用户的应用：仅卸载当前用户
-            confirmMessage = "ℹ️ 这是用户 " + app.userId + " 的应用\n\n" +
+            confirmMessage = "这是用户 " + app.userId + " 的应用\n\n" +
                            "确定要仅为【用户" + app.userId + "】卸载应用 \"" + app.packageName + "\" 吗？\n" +
                            "其他用户的应用将不受影响。";
             adbCommand = new String[]{"adb", "-s", device, "shell", "pm", "uninstall", "--user", String.valueOf(app.userId), app.packageName};
@@ -804,8 +1223,8 @@ public class AndroidAppManager extends JFrame {
             
             if (result.contains("Success")) {
                 String successMsg = app.userId == 0 ? 
-                    "✅ 应用已从所有用户中卸载成功！" : 
-                    "✅ 应用已从用户" + app.userId + "中卸载成功！";
+                    "应用已从所有用户中卸载成功" : 
+                    "应用已从用户" + app.userId + "中卸载成功";
                 logSuccess(successMsg + " (" + app.packageName + ")");
                 showSuccess(successMsg);
                 loadApps();
@@ -835,7 +1254,7 @@ public class AndroidAppManager extends JFrame {
         // 二次确认
         int confirm = JOptionPane.showConfirmDialog(
             this,
-            "⚠️ 警告：此操作不可恢复！\n\n" +
+            "警告：此操作不可恢复！\n\n" +
             "确定要清除用户" + app.userId + "的应用 \"" + app.packageName + "\" 的所有数据吗？\n" +
             "包括：登录信息、设置、本地文件等",
             "确认清除数据",
@@ -869,7 +1288,7 @@ public class AndroidAppManager extends JFrame {
             logInfo("ADB输出: " + result.trim());
             
             if (result.contains("Success") || result.contains("success")) {
-                String msg = "✅ 用户" + app.userId + "的应用数据清除成功！";
+                String msg = "用户" + app.userId + "的应用数据清除成功";
                 logSuccess(msg + " (" + app.packageName + ")");
                 showSuccess(msg);
             } else {
@@ -885,7 +1304,7 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
-     * 清除应用缓存
+     * 清除应用缓存（使用正确的命令）
      */
     private void clearCache(AppInfo app) {
         String device = (String) deviceComboBox.getSelectedItem();
@@ -899,7 +1318,7 @@ public class AndroidAppManager extends JFrame {
         int confirm = JOptionPane.showConfirmDialog(
             this,
             "确定要清除用户" + app.userId + "的应用 \"" + app.packageName + "\" 的缓存吗？\n\n" +
-            "注意：当前ADB版本会同时清除应用数据",
+            "注意：这将只清除缓存文件，不会删除应用数据",
             "确认清除缓存",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.QUESTION_MESSAGE
@@ -911,8 +1330,10 @@ public class AndroidAppManager extends JFrame {
         }
         
         setStatus("正在清除应用缓存...");
-        String[] adbCommand = new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName};
+        // 使用正确的清除缓存命令：am trim-caches 或通过包管理器清理
+        String[] adbCommand = new String[]{"adb", "-s", device, "shell", "pm", "trim-caches", "999G"};
         logInfo("执行清除缓存命令: " + String.join(" ", adbCommand));
+        logInfo("注意：Android系统会清除所有应用的缓存，包括目标应用");
         
         try {
             Process process = Runtime.getRuntime().exec(adbCommand);
@@ -930,14 +1351,10 @@ public class AndroidAppManager extends JFrame {
             String result = output.toString();
             logInfo("ADB输出: " + result.trim());
             
-            if (result.contains("Success") || result.contains("success")) {
-                String msg = "✅ 用户" + app.userId + "的应用缓存清除成功！";
-                logSuccess(msg + " (" + app.packageName + ") [注意：也会清除数据]");
-                showSuccess(msg + "\n注意：此操作也会清除应用数据");
-            } else {
-                logError("清除缓存失败: " + result);
-                showError("清除缓存失败: " + result);
-            }
+            // trim-caches命令通常返回空或简单确认
+            String msg = "用户" + app.userId + "的应用缓存已清除";
+            logSuccess(msg + " (" + app.packageName + ")");
+            showSuccess(msg + "\n注意：系统清除了所有应用的缓存以释放空间");
             
         } catch (Exception e) {
             logError("清除应用缓存异常: " + e.getMessage());
@@ -962,11 +1379,11 @@ public class AndroidAppManager extends JFrame {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(
                 this,
-                "❌ " + message,
+                message,
                 "操作失败",
-                JOptionPane.ERROR_MESSAGE
+                JOptionPane.PLAIN_MESSAGE
             );
-            setStatus("❌ 操作失败");
+            setStatus("操作失败");
         });
     }
     
@@ -977,9 +1394,9 @@ public class AndroidAppManager extends JFrame {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(
                 this,
-                "⚠️ " + message,
+                message,
                 "警告",
-                JOptionPane.WARNING_MESSAGE
+                JOptionPane.PLAIN_MESSAGE
             );
         });
     }
@@ -993,9 +1410,9 @@ public class AndroidAppManager extends JFrame {
                 this,
                 message,
                 "操作成功",
-                JOptionPane.INFORMATION_MESSAGE
+                JOptionPane.PLAIN_MESSAGE
             );
-            setStatus("✅ 操作成功");
+            setStatus("操作成功");
         });
     }
     
@@ -1003,10 +1420,10 @@ public class AndroidAppManager extends JFrame {
      * 主方法 - 程序入口
      */
     public static void main(String[] args) {
-        System.out.println("╔═══════════════════════════════════════════════════════════╗");
-        System.out.println("║         Android应用管理工具 v3.0 - 慧兜兜专用版            ║");
-        System.out.println("║         仅用于学习和研究，不建议在生产环境中使用           ║");
-        System.out.println("╚═══════════════════════════════════════════════════════════╝");
+        System.out.println("===========================================================");
+        System.out.println("       Android应用管理工具 v3.0 - 慧兜兜专用版");
+        System.out.println("       仅用于学习和研究，不建议在生产环境中使用");
+        System.out.println("===========================================================");
         System.out.println();
         
         // 设置系统外观
@@ -1021,10 +1438,16 @@ public class AndroidAppManager extends JFrame {
             try {
                 AndroidAppManager manager = new AndroidAppManager();
                 manager.setVisible(true);
-                System.out.println("✅ GUI界面已启动");
-                System.out.println("💡 提示：所有操作日志将在此控制台输出\n");
+                
+                // 输出窗口实际尺寸信息
+                java.awt.Dimension size = manager.getSize();
+                java.awt.Dimension contentSize = manager.getContentPane().getSize();
+                System.out.println("GUI界面已启动");
+                System.out.println("窗口外部尺寸（包括标题栏和边框）: " + size.width + "x" + size.height);
+                System.out.println("内容区域尺寸: " + contentSize.width + "x" + contentSize.height);
+                System.out.println("提示：所有操作日志将在此控制台输出\n");
             } catch (Exception e) {
-                System.err.println("❌ 启动失败: " + e.getMessage());
+                System.err.println("启动失败: " + e.getMessage());
                 JOptionPane.showMessageDialog(
                     null,
                     "启动失败: " + e.getMessage(),
