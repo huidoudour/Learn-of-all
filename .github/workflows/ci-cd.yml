@@ -1,0 +1,204 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ['**']  # 监控所有分支的推送
+
+jobs:
+  # Job 1: Java 编译任务 - 检测 Java 文件变化并编译
+  java-build:
+    name: Java Build Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # 获取最近两次提交以进行比对
+
+      - name: Check for Java file changes
+        id: check-changes
+        run: |
+          echo "Checking for Java file changes..."
+          
+          # 获取当前提交和上次提交的差异
+          if [ ${{ github.event.before }} != "0000000000000000000000000000000000000000" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          else
+            # 如果是首次提交，检查所有文件
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # 检查是否有 .java 或 pom.xml 文件变更
+          JAVA_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -qE '\.java$|pom\.xml$'; then
+            JAVA_CHANGED=true
+            echo "Java files or pom.xml changed!"
+          fi
+          
+          echo "java_changed=$JAVA_CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Setup JDK
+        if: steps.check-changes.outputs.java_changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compile Java modules
+        if: steps.check-changes.outputs.java_changed == 'true'
+        continue-on-error: true  # 编译失败不影响工作流继续
+        run: |
+          echo "Starting Java compilation..."
+          
+          # 查找所有包含 pom.xml 的目录并编译
+          FAILED_MODULES=""
+          SUCCESS_MODULES=""
+          
+          # 编译 spring-demo
+          if [ -d "Java/SpringIOC容器/spring-demo" ]; then
+            echo "Compiling spring-demo..."
+            cd Java/SpringIOC容器/spring-demo
+            if mvn clean compile -q; then
+              SUCCESS_MODULES="$SUCCESS_MODULES spring-demo"
+            else
+              FAILED_MODULES="$FAILED_MODULES spring-demo"
+            fi
+            cd ../../..
+          fi
+          
+          # 编译 zms-spring
+          if [ -d "Java/SpringIOC容器/zms-spring" ]; then
+            echo "Compiling zms-spring..."
+            cd Java/SpringIOC容器/zms-spring
+            if mvn clean compile -q; then
+              SUCCESS_MODULES="$SUCCESS_MODULES zms-spring"
+            else
+              FAILED_MODULES="$FAILED_MODULES zms-spring"
+            fi
+            cd ../../..
+          fi
+          
+          # 编译 juc-demo
+          if [ -d "Java/concurrent-programming/juc-demo" ]; then
+            echo "Compiling juc-demo..."
+            cd Java/concurrent-programming/juc-demo
+            if mvn clean compile -q; then
+              SUCCESS_MODULES="$SUCCESS_MODULES juc-demo"
+            else
+              FAILED_MODULES="$FAILED_MODULES juc-demo"
+            fi
+            cd ../..
+          fi
+          
+          # 编译 design-pattern
+          if [ -d "Java/design-pattern-code/design-pattern" ]; then
+            echo "Compiling design-pattern..."
+            cd Java/design-pattern-code/design-pattern
+            if mvn clean compile -q; then
+              SUCCESS_MODULES="$SUCCESS_MODULES design-pattern"
+            else
+              FAILED_MODULES="$FAILED_MODULES design-pattern"
+            fi
+            cd ../..
+          fi
+          
+          echo ""
+          echo "===== Compilation Summary ====="
+          echo "Successful modules:$SUCCESS_MODULES"
+          if [ -n "$FAILED_MODULES" ]; then
+            echo "Failed modules:$FAILED_MODULES"
+          else
+            echo "All modules compiled successfully!"
+          fi
+          echo "================================="
+
+      - name: Package compiled artifacts
+        if: steps.check-changes.outputs.java_changed == 'true'
+        continue-on-error: true
+        run: |
+          echo "Packaging compiled Java artifacts..."
+          
+          # 创建打包目录
+          mkdir -p java-build-output
+          
+          # 复制所有 target 目录（如果存在）
+          find Java -type d -name "target" -exec cp -r {} java-build-output/ \; 2>/dev/null || true
+          
+          # 如果没有 target 目录，创建一个说明文件
+          if [ ! -d "java-build-output/target" ]; then
+            echo "No compiled artifacts found (compilation may have failed or no Java changes)" > java-build-output/BUILD_INFO.txt
+            echo "Build time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> java-build-output/BUILD_INFO.txt
+          fi
+          
+          # 打包为 build-pack.zip
+          cd java-build-output
+          zip -r ../build-pack.zip .
+          cd ..
+
+      - name: Upload Java build artifacts
+        if: steps.check-changes.outputs.java_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-compiled-artifacts
+          path: build-pack.zip
+          retention-days: 7
+
+  # Job 2: 代码打包任务 - 打包所有代码文件
+  code-package:
+    name: Code Package
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get commit information
+        id: commit-info
+        run: |
+          echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "commit_message=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+          echo "author=${{ github.actor }}" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_OUTPUT
+
+      - name: Package all code
+        run: |
+          echo "Packaging all code files..."
+          
+          # 创建打包信息文件
+          echo "Learn-of-all Project Package" > PACKAGING_INFO.txt
+          echo "============================" >> PACKAGING_INFO.txt
+          echo "Branch: ${{ steps.commit-info.outputs.branch }}" >> PACKAGING_INFO.txt
+          echo "Commit: ${{ steps.commit-info.outputs.commit_sha }}" >> PACKAGING_INFO.txt
+          echo "Message: ${{ steps.commit-info.outputs.commit_message }}" >> PACKAGING_INFO.txt
+          echo "Author: ${{ steps.commit-info.outputs.author }}" >> PACKAGING_INFO.txt
+          echo "Timestamp: ${{ steps.commit-info.outputs.timestamp }} (UTC)" >> PACKAGING_INFO.txt
+          echo "" >> PACKAGING_INFO.txt
+          echo "This package contains all project files excluding .git directory." >> PACKAGING_INFO.txt
+          echo "Generated by GitHub Actions CI/CD Pipeline." >> PACKAGING_INFO.txt
+          
+          # 打包所有文件（排除 .git 目录）为 auto-pack.zip
+          zip -r auto-pack.zip . \
+            -x "*.git/*" \
+            -x ".gitignore" \
+            -x "PACKAGING_INFO.txt"
+          
+          # 将打包信息文件也加入压缩包
+          zip -u auto-pack.zip PACKAGING_INFO.txt
+          
+          echo "Package created: auto-pack.zip"
+          ls -lh auto-pack.zip
+
+      - name: Upload code package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: learn-of-all-code-${{ steps.commit-info.outputs.branch }}-${{ steps.commit-info.outputs.timestamp }}
+          path: auto-pack.zip
+          retention-days: 30
