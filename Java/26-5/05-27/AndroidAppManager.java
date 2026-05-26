@@ -27,15 +27,17 @@ import java.util.Map;
  */
 public class AndroidAppManager extends JFrame {
     
-    // 配色方案
-    private static final Color PRIMARY_COLOR = new Color(66, 133, 244);      // Google蓝
-    private static final Color SUCCESS_COLOR = new Color(52, 168, 83);       // 成功绿
-    private static final Color WARNING_COLOR = new Color(251, 188, 5);       // 警告黄
-    private static final Color DANGER_COLOR = new Color(234, 67, 53);        // 危险红
-    private static final Color BACKGROUND_COLOR = new Color(248, 249, 250);  // 浅灰背景
-    private static final Color CARD_COLOR = Color.WHITE;                     // 卡片白
-    private static final Color TEXT_PRIMARY = new Color(32, 33, 36);         // 主文字
-    private static final Color TEXT_SECONDARY = new Color(95, 99, 104);      // 次要文字
+    // 配色方案 - 柔和护眼版
+    private static final Color PRIMARY_COLOR = new Color(70, 130, 180);        // 钢蓝色（柔和）
+    private static final Color SUCCESS_COLOR = new Color(60, 140, 90);         // 柔和绿
+    private static final Color WARNING_COLOR = new Color(210, 160, 50);        // 柔和黄
+    private static final Color DANGER_COLOR = new Color(190, 70, 70);          // 柔和红
+    private static final Color BACKGROUND_COLOR = new Color(245, 246, 247);    // 浅灰背景
+    private static final Color CARD_COLOR = new Color(252, 252, 253);          // 卡片白
+    private static final Color TEXT_PRIMARY = new Color(50, 50, 50);           // 主文字
+    private static final Color TEXT_SECONDARY = new Color(100, 100, 100);      // 次要文字
+    private static final Color BORDER_COLOR = new Color(220, 222, 225);        // 边框色
+    private static final Color HOVER_COLOR = new Color(235, 240, 245);         // 悬停色
     
     // UI组件
     private JComboBox<String> deviceComboBox;
@@ -145,6 +147,33 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
+     * 日志输出到控制台
+     */
+    private void log(String message) {
+        String timestamp = new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+        System.out.println("[" + timestamp + "] " + message);
+    }
+    
+    /**
+     * 日志输出（带级别）
+     */
+    private void logInfo(String message) {
+        log("ℹ️  INFO: " + message);
+    }
+    
+    private void logSuccess(String message) {
+        log("✅ SUCCESS: " + message);
+    }
+    
+    private void logWarning(String message) {
+        log("⚠️  WARNING: " + message);
+    }
+    
+    private void logError(String message) {
+        log("❌ ERROR: " + message);
+    }
+    
+    /**
      * 创建顶部控制面板
      */
     private JPanel createTopPanel() {
@@ -182,28 +211,51 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
-     * 创建美化按钮
+     * 创建美化按钮（圆角设计）
      */
     private JButton createStyledButton(String text, Color bgColor) {
-        JButton button = new JButton(text);
+        JButton button = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                // 绘制圆角背景
+                g2d.setColor(getBackground());
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                
+                // 绘制文字
+                super.paintComponent(g);
+                g2d.dispose();
+            }
+            
+            @Override
+            protected void paintBorder(Graphics g) {
+                // 不绘制默认边框
+            }
+        };
+        
         button.setFont(new Font("微软雅黑", Font.BOLD, 12));
         button.setForeground(Color.WHITE);
         button.setBackground(bgColor);
         button.setFocusPainted(false);
         button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        button.setPreferredSize(new Dimension(120, 32));
+        button.setPreferredSize(new Dimension(130, 36));
         
         // 鼠标悬停效果
         button.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
                 button.setBackground(bgColor.brighter());
+                button.repaint();
             }
             
             @Override
             public void mouseExited(MouseEvent e) {
                 button.setBackground(bgColor);
+                button.repaint();
             }
         });
         
@@ -228,14 +280,16 @@ public class AndroidAppManager extends JFrame {
     }
     
     /**
-     * 创建用户应用面板
+     * 创建用户应用面板（圆角卡片设计）
      */
     private JPanel createUserPanel(String title, boolean isUser0) {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBackground(CARD_COLOR);
+        
+        // 圆角边框
         panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(232, 234, 237), 1),
-            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+            new RoundBorder(BORDER_COLOR, 12),
+            BorderFactory.createEmptyBorder(12, 12, 12, 12)
         ));
         
         // 标题面板
@@ -243,7 +297,7 @@ public class AndroidAppManager extends JFrame {
         titlePanel.setBackground(CARD_COLOR);
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(new Font("微软雅黑", Font.BOLD, 14));
-        titleLabel.setForeground(isUser0 ? PRIMARY_COLOR : new Color(156, 39, 176)); // 主用户蓝色，其他用户紫色
+        titleLabel.setForeground(isUser0 ? PRIMARY_COLOR : new Color(130, 80, 160)); // 更柔和的紫色
         titlePanel.add(titleLabel);
         panel.add(titlePanel, BorderLayout.NORTH);
         
@@ -397,7 +451,9 @@ public class AndroidAppManager extends JFrame {
             if (app != null) {
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
                     new java.awt.datatransfer.StringSelection(app.packageName), null);
-                setStatus("✅ 已复制包名: " + app.packageName);
+                String msg = "已复制包名: " + app.packageName;
+                logInfo(msg);
+                setStatus("✅ " + msg);
             }
         });
         popupMenu.add(copyPackageItem);
@@ -462,6 +518,7 @@ public class AndroidAppManager extends JFrame {
      * 加载已连接的设备
      */
     private void loadDevices() {
+        logInfo("开始检测设备...");
         setStatus("正在检测设备...");
         deviceComboBox.removeAllItems();
         
@@ -471,6 +528,7 @@ public class AndroidAppManager extends JFrame {
             
             String line;
             boolean firstLine = true;
+            int deviceCount = 0;
             while ((line = reader.readLine()) != null) {
                 if (firstLine) {
                     firstLine = false;
@@ -484,6 +542,8 @@ public class AndroidAppManager extends JFrame {
                 String[] parts = line.split("\\s+");
                 if (parts.length >= 2 && "device".equals(parts[1])) {
                     deviceComboBox.addItem(parts[0]);
+                    deviceCount++;
+                    logInfo("发现设备: " + parts[0]);
                 }
             }
             
@@ -493,11 +553,14 @@ public class AndroidAppManager extends JFrame {
             if (deviceComboBox.getItemCount() == 0) {
                 deviceComboBox.addItem("未检测到设备");
                 setStatus("未检测到已连接的设备");
+                logWarning("未检测到任何设备");
             } else {
                 setStatus("检测到 " + deviceComboBox.getItemCount() + " 个设备");
+                logSuccess("共检测到 " + deviceCount + " 个设备");
             }
             
         } catch (Exception e) {
+            logError("检测设备失败: " + e.getMessage());
             showError("检测设备失败: " + e.getMessage());
             e.printStackTrace();
         }
@@ -509,10 +572,12 @@ public class AndroidAppManager extends JFrame {
     private void loadApps() {
         String device = (String) deviceComboBox.getSelectedItem();
         if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试加载应用但未选择有效设备");
             showWarning("请先选择有效的设备");
             return;
         }
         
+        logInfo("开始加载设备 [" + device + "] 的应用列表...");
         setStatus("正在加载应用列表...");
         allApps.clear();
         userAppsMap.clear();
@@ -524,19 +589,25 @@ public class AndroidAppManager extends JFrame {
         try {
             // 获取所有用户ID
             List<Integer> userIds = getUserIds(device);
+            logInfo("发现 " + userIds.size() + " 个用户: " + userIds);
             
             // 为每个用户获取第三方应用
+            int totalApps = 0;
             for (int userId : userIds) {
                 List<AppInfo> apps = getThirdPartyApps(device, userId);
                 userAppsMap.put(userId, apps);
                 allApps.addAll(apps);
+                totalApps += apps.size();
+                logInfo("用户 " + userId + " 有 " + apps.size() + " 个第三方应用");
             }
             
             // 更新表格（分左右栏显示）
             updateTables();
             setStatus("已加载 " + allApps.size() + " 个应用（" + userIds.size() + " 个用户）");
+            logSuccess("共加载 " + totalApps + " 个应用");
             
         } catch (Exception e) {
+            logError("加载应用列表失败: " + e.getMessage());
             showError("加载应用列表失败: " + e.getMessage());
             e.printStackTrace();
         }
@@ -673,26 +744,29 @@ public class AndroidAppManager extends JFrame {
     private void uninstallApp(AppInfo app) {
         String device = (String) deviceComboBox.getSelectedItem();
         if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试卸载应用但未选择有效设备");
             showWarning("请先选择有效的设备");
             return;
         }
         
         // 智能卸载逻辑
         String confirmMessage;
-        String adbCommand;
+        String[] adbCommand;
         
         if (app.userId == 0) {
             // 主用户0的应用：为所有用户卸载
             confirmMessage = "⚠️ 这是主用户（用户0）的应用\n\n" +
                            "确定要为【所有用户】卸载应用 \"" + app.packageName + "\" 吗？\n" +
                            "此操作将从所有用户空间中删除该应用，不可恢复！";
-            adbCommand = "adb -s " + device + " uninstall " + app.packageName;
+            adbCommand = new String[]{"adb", "-s", device, "uninstall", app.packageName};
+            logInfo("准备卸载应用 (所有用户): " + app.packageName);
         } else {
             // 非主用户的应用：仅卸载当前用户
             confirmMessage = "ℹ️ 这是用户 " + app.userId + " 的应用\n\n" +
                            "确定要仅为【用户" + app.userId + "】卸载应用 \"" + app.packageName + "\" 吗？\n" +
                            "其他用户的应用将不受影响。";
-            adbCommand = "adb -s " + device + " shell pm uninstall --user " + app.userId + " " + app.packageName;
+            adbCommand = new String[]{"adb", "-s", device, "shell", "pm", "uninstall", "--user", String.valueOf(app.userId), app.packageName};
+            logInfo("准备卸载应用 (用户" + app.userId + "): " + app.packageName);
         }
         
         // 二次确认
@@ -705,10 +779,12 @@ public class AndroidAppManager extends JFrame {
         );
         
         if (confirm != JOptionPane.YES_OPTION) {
+            logInfo("用户取消了卸载操作");
             return;
         }
         
         setStatus("正在卸载应用...");
+        logInfo("执行命令: " + String.join(" ", adbCommand));
         
         try {
             Process process = Runtime.getRuntime().exec(adbCommand);
@@ -724,17 +800,22 @@ public class AndroidAppManager extends JFrame {
             process.waitFor();
             
             String result = output.toString();
+            logInfo("ADB输出: " + result.trim());
+            
             if (result.contains("Success")) {
                 String successMsg = app.userId == 0 ? 
                     "✅ 应用已从所有用户中卸载成功！" : 
                     "✅ 应用已从用户" + app.userId + "中卸载成功！";
+                logSuccess(successMsg + " (" + app.packageName + ")");
                 showSuccess(successMsg);
                 loadApps();
             } else {
+                logError("卸载失败: " + result);
                 showError("卸载失败: " + result);
             }
             
         } catch (Exception e) {
+            logError("卸载应用异常: " + e.getMessage());
             showError("卸载应用失败: " + e.getMessage());
             e.printStackTrace();
         }
@@ -746,6 +827,7 @@ public class AndroidAppManager extends JFrame {
     private void clearData(AppInfo app) {
         String device = (String) deviceComboBox.getSelectedItem();
         if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试清除数据但未选择有效设备");
             showWarning("请先选择有效的设备");
             return;
         }
@@ -762,15 +844,16 @@ public class AndroidAppManager extends JFrame {
         );
         
         if (confirm != JOptionPane.YES_OPTION) {
+            logInfo("用户取消了清除数据操作");
             return;
         }
         
         setStatus("正在清除应用数据...");
+        String[] adbCommand = new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName};
+        logInfo("执行清除数据命令: " + String.join(" ", adbCommand));
         
         try {
-            Process process = Runtime.getRuntime().exec(
-                new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName}
-            );
+            Process process = Runtime.getRuntime().exec(adbCommand);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
             StringBuilder output = new StringBuilder();
@@ -783,13 +866,19 @@ public class AndroidAppManager extends JFrame {
             process.waitFor();
             
             String result = output.toString();
+            logInfo("ADB输出: " + result.trim());
+            
             if (result.contains("Success") || result.contains("success")) {
-                showSuccess("✅ 用户" + app.userId + "的应用数据清除成功！");
+                String msg = "✅ 用户" + app.userId + "的应用数据清除成功！";
+                logSuccess(msg + " (" + app.packageName + ")");
+                showSuccess(msg);
             } else {
+                logError("清除数据失败: " + result);
                 showError("清除数据失败: " + result);
             }
             
         } catch (Exception e) {
+            logError("清除应用数据异常: " + e.getMessage());
             showError("清除应用数据失败: " + e.getMessage());
             e.printStackTrace();
         }
@@ -801,6 +890,7 @@ public class AndroidAppManager extends JFrame {
     private void clearCache(AppInfo app) {
         String device = (String) deviceComboBox.getSelectedItem();
         if (device == null || "未检测到设备".equals(device)) {
+            logWarning("尝试清除缓存但未选择有效设备");
             showWarning("请先选择有效的设备");
             return;
         }
@@ -816,15 +906,16 @@ public class AndroidAppManager extends JFrame {
         );
         
         if (confirm != JOptionPane.YES_OPTION) {
+            logInfo("用户取消了清除缓存操作");
             return;
         }
         
         setStatus("正在清除应用缓存...");
+        String[] adbCommand = new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName};
+        logInfo("执行清除缓存命令: " + String.join(" ", adbCommand));
         
         try {
-            Process process = Runtime.getRuntime().exec(
-                new String[]{"adb", "-s", device, "shell", "pm", "clear", "--user", String.valueOf(app.userId), app.packageName}
-            );
+            Process process = Runtime.getRuntime().exec(adbCommand);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             
             StringBuilder output = new StringBuilder();
@@ -837,13 +928,19 @@ public class AndroidAppManager extends JFrame {
             process.waitFor();
             
             String result = output.toString();
+            logInfo("ADB输出: " + result.trim());
+            
             if (result.contains("Success") || result.contains("success")) {
-                showSuccess("✅ 用户" + app.userId + "的应用缓存清除成功！\n注意：此操作也会清除应用数据");
+                String msg = "✅ 用户" + app.userId + "的应用缓存清除成功！";
+                logSuccess(msg + " (" + app.packageName + ") [注意：也会清除数据]");
+                showSuccess(msg + "\n注意：此操作也会清除应用数据");
             } else {
+                logError("清除缓存失败: " + result);
                 showError("清除缓存失败: " + result);
             }
             
         } catch (Exception e) {
+            logError("清除应用缓存异常: " + e.getMessage());
             showError("清除应用缓存失败: " + e.getMessage());
             e.printStackTrace();
         }
@@ -906,6 +1003,12 @@ public class AndroidAppManager extends JFrame {
      * 主方法 - 程序入口
      */
     public static void main(String[] args) {
+        System.out.println("╔═══════════════════════════════════════════════════════════╗");
+        System.out.println("║         Android应用管理工具 v3.0 - 慧兜兜专用版            ║");
+        System.out.println("║         仅用于学习和研究，不建议在生产环境中使用           ║");
+        System.out.println("╚═══════════════════════════════════════════════════════════╝");
+        System.out.println();
+        
         // 设置系统外观
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -918,7 +1021,10 @@ public class AndroidAppManager extends JFrame {
             try {
                 AndroidAppManager manager = new AndroidAppManager();
                 manager.setVisible(true);
+                System.out.println("✅ GUI界面已启动");
+                System.out.println("💡 提示：所有操作日志将在此控制台输出\n");
             } catch (Exception e) {
+                System.err.println("❌ 启动失败: " + e.getMessage());
                 JOptionPane.showMessageDialog(
                     null,
                     "启动失败: " + e.getMessage(),
@@ -928,5 +1034,37 @@ public class AndroidAppManager extends JFrame {
                 e.printStackTrace();
             }
         });
+    }
+    
+    /**
+     * 圆角边框类
+     */
+    static class RoundBorder implements javax.swing.border.Border {
+        private Color color;
+        private int radius;
+        
+        public RoundBorder(Color color, int radius) {
+            this.color = color;
+            this.radius = radius;
+        }
+        
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setColor(color);
+            g2d.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+            g2d.dispose();
+        }
+        
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(2, 2, 2, 2);
+        }
+        
+        @Override
+        public boolean isBorderOpaque() {
+            return false;
+        }
     }
 }
