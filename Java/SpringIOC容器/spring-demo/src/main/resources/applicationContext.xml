@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+
+    <bean id="userDao" class="com.zms.dao.impl.UserDaoImpl"></bean>
+
+    <bean id="userService" class="com.zms.service.impl.UserServiceImpl">
+        <property name="userDao" ref="userDao"></property>
+        <property name="username" value="张三"></property>
+        <property name="password" value="123456"></property>
+    </bean>
+
+</beans>
