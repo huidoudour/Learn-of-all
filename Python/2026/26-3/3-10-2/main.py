@@ -1,5 +1,3 @@
-﻿#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 SNMP网络设备监控系统启动脚本
 检查依赖并启动Web服务
@@ -7,7 +5,7 @@ SNMP网络设备监控系统启动脚本
 
 import subprocess
 import sys
-import os
+
 
 def check_dependencies():
     """检查依赖包是否安装"""
@@ -64,7 +62,7 @@ def main():
     
     try:
         # 启动Flask应用
-        from app import app
+        from web import app
         print("启动Flask应用...")
         app.run(host='0.0.0.0', port=5000, debug=True)
     except Exception as e:

@@ -1,12 +1,11 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 SNMP功能测试脚本
 验证设备连通性和数据采集
 """
 
-import json
-from snmp_monitor import monitor
+from monitor import monitor
 
 def test_basic_functions():
     """测试基本功能"""
@@ -80,10 +79,10 @@ def main():
     try:
         test_basic_functions()
         print("===============================================")
-        print(" 所有测试完成！")
+        print("✅ 所有测试完成！")
         print("===============================================")
     except Exception as e:
-        print(f" 测试出错: {e}")
+        print(f"❌ 测试出错: {e}")
         print("===============================================")
 
 if __name__ == "__main__":

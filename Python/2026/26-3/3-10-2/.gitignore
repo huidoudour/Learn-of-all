@@ -1,4 +1,8 @@
-﻿oids.txt
+oids.txt
 __pycache__/
-ints.txt
+.cache/ints.txt
 walk.txt
+.cache/oid.txt
+*.log
+*.csv
+.cache
