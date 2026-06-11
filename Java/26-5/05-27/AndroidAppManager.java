@@ -64,7 +64,7 @@ public class AndroidAppManager extends JFrame {
         public AppInfo(String packageName, int userId) {
             this.packageName = packageName;
             this.userId = userId;
-            this.isHuidoudour = packageName.contains("huidoudour");
+            this.isHuidoudour = packageName.contains("huidou");
         }
         
         @Override
@@ -591,7 +591,7 @@ public class AndroidAppManager extends JFrame {
                     // 交替行颜色
                     setBackground(row % 2 == 0 ? CARD_COLOR : new Color(57, 60, 64));
                     
-                    // huidoudour应用特殊标记
+                    // huidou应用特殊标记
                     if (column == 1 && value != null && value.toString().contains("⭐")) {
                         setForeground(new Color(200, 138, 35)); // 暖金（低饱和）
                         setFont(getFont().deriveFont(Font.BOLD));
@@ -996,7 +996,7 @@ public class AndroidAppManager extends JFrame {
         // 左栏：用户0的应用
         List<AppInfo> user0Apps = userAppsMap.getOrDefault(0, new ArrayList<>());
         for (AppInfo app : user0Apps) {
-            String type = app.isHuidoudour ? "# huidoudour" : "第三方";
+            String type = app.isHuidoudour ? "# huidou" : "第三方";
             user0Model.addRow(new Object[]{app.packageName, type});
         }
         
@@ -1004,7 +1004,7 @@ public class AndroidAppManager extends JFrame {
         for (Map.Entry<Integer, List<AppInfo>> entry : userAppsMap.entrySet()) {
             if (entry.getKey() != 0) {
                 for (AppInfo app : entry.getValue()) {
-                    String type = app.isHuidoudour ? "# huidoudour" : "第三方";
+                    String type = app.isHuidoudour ? "# huidou" : "第三方";
                     otherUserModel.addRow(new Object[]{app.packageName + " [用户" + app.userId + "]", type});
                 }
             }
