@@ -4,9 +4,12 @@
  */
 import javax.swing.*;
 import javax.swing.text.*;
+import javax.swing.border.*;
 import java.awt.*;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.*;
 import java.util.prefs.Preferences;
 
 public class RepoManager {
@@ -23,6 +26,7 @@ public class RepoManager {
 
 class GitRepoManager extends JFrame {
     private static final String PREF_KEY_LAST_REPO = "lastRepoPath";
+    private static final String REPO_JSON_FILE = "repo.json";
 
     private final JTextField repoPathField = new JTextField();
     private final JLabel remoteInfoLabel = new JLabel("未选择仓库");
@@ -31,20 +35,30 @@ class GitRepoManager extends JFrame {
     private final StyledDocument outputDoc;
     private final Preferences prefs = Preferences.userNodeForPackage(GitRepoManager.class);
 
+    // ── 多仓库管理 ──
+    private final DefaultListModel<RepoPathInfo> repoListModel = new DefaultListModel<>();
+    private final JList<RepoPathInfo> repoJList = new JList<>(repoListModel);
+    private final java.util.List<String> repoPaths = new ArrayList<>();
+
     public GitRepoManager() {
         setTitle("Git 仓库管理工具");
-        setSize(720, 540);
+        setSize(960, 620);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         outputDoc = outputPane.getStyledDocument();
         setupUI();
 
+        // 加载保存的仓库列表
+        loadRepoList();
+
         // 记忆上次打开的仓库
         String lastRepo = prefs.get(PREF_KEY_LAST_REPO, "");
         if (!lastRepo.isEmpty()) {
             repoPathField.setText(lastRepo);
             if (new File(lastRepo, ".git").isDirectory()) {
+                // 选中对应的仓库项
+                selectRepoInList(lastRepo);
                 SwingUtilities.invokeLater(this::loadRepo);
             } else {
                 log("⚠ 上次的仓库路径已失效: " + lastRepo);
@@ -56,21 +70,104 @@ class GitRepoManager extends JFrame {
     // ── UI 搭建 ──────────────────────────────────────────────
 
     private void setupUI() {
+        // ── 整体布局：左右分栏 ──
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        splitPane.setBorder(null);
+        splitPane.setDividerSize(6);
+        splitPane.setResizeWeight(0.2); // 左栏占 20%
+        splitPane.setDividerLocation(220);
+
+        // ── 左栏：仓库列表 ──
+        splitPane.setLeftComponent(buildLeftPanel());
+
+        // ── 右栏：原有操作界面 ──
+        splitPane.setRightComponent(buildRightPanel());
+
+        add(splitPane, BorderLayout.CENTER);
+
+        // ── 底部状态栏 ──
+        statusBar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
+                BorderFactory.createEmptyBorder(4, 4, 4, 4)));
+        add(statusBar, BorderLayout.SOUTH);
+    }
+
+    /** 构建左栏：仓库列表 */
+    private JPanel buildLeftPanel() {
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 8, 10, 4));
+
+        JLabel title = new JLabel("📂 我的仓库");
+        title.setFont(new Font("微软雅黑", Font.BOLD, 14));
+        panel.add(title, BorderLayout.NORTH);
+
+        // 仓库列表
+        repoJList.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        repoJList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        repoJList.setFixedCellHeight(48);
+        repoJList.setBorder(BorderFactory.createLineBorder(new Color(0xDD, 0xDD, 0xDD)));
+        repoJList.setCellRenderer(new RepoListCellRenderer());
+
+        // 双击或回车切换到选中的仓库
+        repoJList.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    switchToSelectedRepo();
+                }
+            }
+        });
+        repoJList.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyPressed(java.awt.event.KeyEvent e) {
+                if (e.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER) {
+                    switchToSelectedRepo();
+                }
+            }
+        });
+
+        JScrollPane listScroll = new JScrollPane(repoJList);
+        listScroll.setBorder(null);
+        panel.add(listScroll, BorderLayout.CENTER);
+
+        // 按钮行
+        JPanel btnPanel = new JPanel(new GridLayout(0, 1, 0, 4));
+
+        JButton addBtn = new JButton("+ 添加仓库");
+        addBtn.setFocusPainted(false);
+        addBtn.addActionListener(e -> addRepoByBrowser());
+
+        JButton removeBtn = new JButton("− 删除仓库");
+        removeBtn.setFocusPainted(false);
+        removeBtn.addActionListener(e -> removeSelectedRepo());
+
+        JButton switchBtn = new JButton("▶ 切换");
+        switchBtn.setFocusPainted(false);
+        switchBtn.addActionListener(e -> switchToSelectedRepo());
+
+        btnPanel.add(addBtn);
+        btnPanel.add(switchBtn);
+        btnPanel.add(removeBtn);
+
+        panel.add(btnPanel, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    /** 构建右栏：原有操作界面 */
+    private JPanel buildRightPanel() {
         JPanel main = new JPanel(new BorderLayout(0, 8));
-        main.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        add(main);
+        main.setBorder(BorderFactory.createEmptyBorder(10, 8, 10, 10));
 
         // ── 路径选择区 ──
         JPanel pathPanel = new JPanel(new BorderLayout(8, 0));
         pathPanel.setBorder(BorderFactory.createTitledBorder("仓库路径"));
 
-        JButton browseBtn = new JButton("浏览…");
         JButton loadBtn = new JButton("加载仓库");
 
         pathPanel.add(repoPathField, BorderLayout.CENTER);
         JPanel pathBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         pathBtns.add(loadBtn);
-        pathBtns.add(browseBtn);
         pathPanel.add(pathBtns, BorderLayout.EAST);
 
         main.add(pathPanel, BorderLayout.NORTH);
@@ -137,15 +234,10 @@ class GitRepoManager extends JFrame {
 
         main.add(middlePanel, BorderLayout.CENTER);
 
-        // ── 底部状态栏 ──
-        statusBar.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
-                BorderFactory.createEmptyBorder(4, 4, 4, 4)));
-        main.add(statusBar, BorderLayout.SOUTH);
-
         // ── 事件绑定 ──
-        browseBtn.addActionListener(e -> browseRepo());
         loadBtn.addActionListener(e -> loadRepo());
+
+        return main;
     }
 
     // ── 工具方法 ─────────────────────────────────────────────
@@ -256,30 +348,6 @@ class GitRepoManager extends JFrame {
 
     // ── 事件处理 ─────────────────────────────────────────────
 
-    private void browseRepo() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle("选择 Git 仓库目录");
-
-        // 默认打开上次的仓库目录
-        String lastRepo = prefs.get(PREF_KEY_LAST_REPO, "");
-        if (!lastRepo.isEmpty()) {
-            chooser.setCurrentDirectory(new File(lastRepo));
-        }
-
-        int result = chooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            String path = chooser.getSelectedFile().getAbsolutePath();
-            repoPathField.setText(path);
-            if (new File(path, ".git").isDirectory()) {
-                loadRepo();
-            } else {
-                remoteInfoLabel.setText("⚠ 所选目录不是 Git 仓库");
-                log("⚠ 所选目录不是 Git 仓库");
-            }
-        }
-    }
-
     private void loadRepo() {
         String path = getRepoPath();
         if (path.isEmpty() || !new File(path).isDirectory()) {
@@ -293,6 +361,15 @@ class GitRepoManager extends JFrame {
         // 保存路径以便下次启动时恢复
         prefs.put(PREF_KEY_LAST_REPO, path);
         log("📂 已加载仓库: " + path);
+
+        // 自动加入左侧列表
+        if (!repoPaths.contains(path)) {
+            repoPaths.add(path);
+            repoListModel.addElement(new RepoPathInfo(path));
+            saveRepoList();
+        }
+        selectRepoInList(path);
+
         listRemotes();
     }
 
@@ -451,6 +528,166 @@ class GitRepoManager extends JFrame {
         log("── 状态结束 ──");
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // ── 多仓库管理 ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+
+    /** 当前目录下的 repo.json 文件路径 */
+    private File repoJsonFile() {
+        return new File(System.getProperty("user.dir"), REPO_JSON_FILE);
+    }
+
+    /** 加载 repo.json 中的仓库列表 */
+    private void loadRepoList() {
+        File file = repoJsonFile();
+        if (!file.exists()) return;
+
+        try {
+            String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            parseRepoJson(content);
+        } catch (IOException e) {
+            log("⚠ 读取 " + REPO_JSON_FILE + " 失败: " + e.getMessage());
+        }
+    }
+
+    /** 解析 JSON 格式的仓库列表（简易实现，不依赖第三方库） */
+    private void parseRepoJson(String json) {
+        // 格式: {"repos":["path1","path2"]}
+        int start = json.indexOf("\"repos\"");
+        if (start < 0) return;
+
+        int arrStart = json.indexOf('[', start);
+        int arrEnd = json.indexOf(']', arrStart);
+        if (arrStart < 0 || arrEnd < 0) return;
+
+        String arrContent = json.substring(arrStart + 1, arrEnd).trim();
+        if (arrContent.isEmpty()) return;
+
+        int idx = 0;
+        while (idx < arrContent.length()) {
+            int q1 = arrContent.indexOf('"', idx);
+            if (q1 < 0) break;
+            int q2 = arrContent.indexOf('"', q1 + 1);
+            if (q2 < 0) break;
+            String path = arrContent.substring(q1 + 1, q2);
+            // 转义还原
+            path = path.replace("\\/", "/").replace("\\\\", "\\");
+            if (!path.isEmpty()) {
+                repoPaths.add(path);
+                repoListModel.addElement(new RepoPathInfo(path));
+            }
+            idx = q2 + 1;
+        }
+    }
+
+    /** 保存仓库列表到 repo.json */
+    private void saveRepoList() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n  \"repos\": [\n");
+        for (int i = 0; i < repoPaths.size(); i++) {
+            String escaped = repoPaths.get(i)
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"");
+            sb.append("    \"").append(escaped).append("\"");
+            if (i < repoPaths.size() - 1) sb.append(",");
+            sb.append("\n");
+        }
+        sb.append("  ]\n}\n");
+
+        try {
+            Files.write(repoJsonFile().toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            log("⚠ 写入 " + REPO_JSON_FILE + " 失败: " + e.getMessage());
+        }
+    }
+
+    /** 通过浏览选择路径，添加到仓库列表 */
+    private void addRepoByBrowser() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setDialogTitle("选择 Git 仓库目录添加到列表");
+        chooser.setApproveButtonText("添加到列表");
+
+        // 默认打开上次的仓库目录
+        String lastRepo = prefs.get(PREF_KEY_LAST_REPO, "");
+        if (!lastRepo.isEmpty()) {
+            chooser.setCurrentDirectory(new File(lastRepo));
+        }
+
+        int result = chooser.showOpenDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) return;
+
+        String path = chooser.getSelectedFile().getAbsolutePath();
+
+        // 检查是否为 Git 仓库
+        if (!new File(path, ".git").isDirectory()) {
+            int ret = JOptionPane.showConfirmDialog(this,
+                    "所选目录不是 Git 仓库（没有 .git 目录），\n仍然添加到列表吗？",
+                    "提示", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (ret != JOptionPane.YES_OPTION) return;
+        }
+
+        if (repoPaths.contains(path)) {
+            JOptionPane.showMessageDialog(this, "该仓库已在列表中", "提示", JOptionPane.INFORMATION_MESSAGE);
+            selectRepoInList(path);
+            return;
+        }
+
+        repoPaths.add(path);
+        repoListModel.addElement(new RepoPathInfo(path));
+        saveRepoList();
+        selectRepoInList(path);
+        log("📂 已添加仓库到列表: " + path);
+    }
+
+    /** 从列表中删除选中的仓库 */
+    private void removeSelectedRepo() {
+        int idx = repoJList.getSelectedIndex();
+        if (idx < 0) {
+            JOptionPane.showMessageDialog(this, "请先在左侧列表中选择要删除的仓库", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "确定要从列表中移除仓库「" + repoListModel.get(idx) + "」吗？\n（不会删除实际目录）",
+                "确认删除", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        repoPaths.remove(idx);
+        repoListModel.remove(idx);
+        saveRepoList();
+        log("🗑 已从列表中移除仓库");
+    }
+
+    /** 切换到列表中选中的仓库 */
+    private void switchToSelectedRepo() {
+        int idx = repoJList.getSelectedIndex();
+        if (idx < 0) {
+            JOptionPane.showMessageDialog(this, "请先在左侧列表中选择一个仓库", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String path = repoPaths.get(idx);
+        repoPathField.setText(path);
+
+        if (!new File(path, ".git").isDirectory()) {
+            JOptionPane.showMessageDialog(this, "该仓库路径已失效（找不到 .git 目录）", "错误", JOptionPane.ERROR_MESSAGE);
+            log("⚠ 仓库路径已失效: " + path);
+            return;
+        }
+
+        loadRepo();
+    }
+
+    /** 在列表中通过路径选中对应项 */
+    private void selectRepoInList(String path) {
+        for (int i = 0; i < repoPaths.size(); i++) {
+            if (repoPaths.get(i).equals(path)) {
+                repoJList.setSelectedIndex(i);
+                repoJList.ensureIndexIsVisible(i);
+                break;
+            }
+        }
+    }
+
     // ── 辅助类 ───────────────────────────────────────────────
 
     private record GitResult(int exitCode, String stdout, String stderr) {
@@ -470,6 +707,77 @@ class GitRepoManager extends JFrame {
         @Override
         public void actionPerformed(java.awt.event.ActionEvent e) {
             action.run();
+        }
+    }
+
+    // ── 仓库列表数据与渲染 ───────────────────────────────────
+
+    /** 仓库列表项：包装路径，提供名称和完整路径 */
+    private static class RepoPathInfo {
+        final String fullPath;
+        final String displayName;
+
+        RepoPathInfo(String fullPath) {
+            this.fullPath = fullPath;
+            this.displayName = getDisplayName(fullPath);
+        }
+
+        /** 从路径中提取简短的显示名称（最后两级目录） */
+        private static String getDisplayName(String path) {
+            Path p = Paths.get(path);
+            int nameCount = p.getNameCount();
+            if (nameCount >= 2) {
+                return p.subpath(nameCount - 2, nameCount).toString().replace("\\", "/");
+            }
+            return path;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
+    /** 仓库列表的自定义单元格渲染器：两行显示（名称 + 路径） */
+    private static class RepoListCellRenderer extends JPanel implements ListCellRenderer<RepoPathInfo> {
+        private final JLabel nameLabel = new JLabel();
+        private final JLabel pathLabel = new JLabel();
+
+        RepoListCellRenderer() {
+            setLayout(new BorderLayout(0, 0));
+            setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
+
+            nameLabel.setFont(new Font("微软雅黑", Font.BOLD, 12));
+            pathLabel.setFont(new Font("Consolas", Font.PLAIN, 10));
+            pathLabel.setForeground(new Color(0x88, 0x88, 0x88));
+
+            JPanel textPanel = new JPanel(new BorderLayout(0, 1));
+            textPanel.setOpaque(false);
+            textPanel.add(nameLabel, BorderLayout.NORTH);
+            textPanel.add(pathLabel, BorderLayout.SOUTH);
+            add(textPanel, BorderLayout.CENTER);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<? extends RepoPathInfo> list,
+                                                       RepoPathInfo value, int index,
+                                                       boolean isSelected, boolean cellHasFocus) {
+            if (value == null) return this;
+
+            nameLabel.setText(value.displayName);
+            pathLabel.setText(value.fullPath);
+
+            if (isSelected) {
+                setBackground(list.getSelectionBackground());
+                nameLabel.setForeground(list.getSelectionForeground());
+                pathLabel.setForeground(list.getSelectionForeground().brighter());
+            } else {
+                setBackground(list.getBackground());
+                nameLabel.setForeground(list.getForeground());
+                pathLabel.setForeground(new Color(0x88, 0x88, 0x88));
+            }
+            setOpaque(true);
+            return this;
         }
     }
 }
