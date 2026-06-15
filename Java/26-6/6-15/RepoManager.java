@@ -97,7 +97,7 @@ class GitRepoManager extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(0, 6));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 8, 10, 4));
 
-        JLabel title = new JLabel("📂 我的仓库");
+        JLabel title = new JLabel("我的仓库");
         title.setFont(new Font("微软雅黑", Font.BOLD, 14));
         panel.add(title, BorderLayout.NORTH);
 
@@ -133,15 +133,15 @@ class GitRepoManager extends JFrame {
         // 按钮行
         JPanel btnPanel = new JPanel(new GridLayout(0, 1, 0, 4));
 
-        JButton addBtn = new JButton("+ 添加仓库");
+        JButton addBtn = new JButton("添加仓库");
         addBtn.setFocusPainted(false);
         addBtn.addActionListener(e -> addRepoByBrowser());
 
-        JButton removeBtn = new JButton("− 删除仓库");
+        JButton removeBtn = new JButton("移除仓库");
         removeBtn.setFocusPainted(false);
         removeBtn.addActionListener(e -> removeSelectedRepo());
 
-        JButton switchBtn = new JButton("▶ 切换");
+        JButton switchBtn = new JButton("切换仓库");
         switchBtn.setFocusPainted(false);
         switchBtn.addActionListener(e -> switchToSelectedRepo());
 
@@ -674,7 +674,18 @@ class GitRepoManager extends JFrame {
             return;
         }
 
+        clearOutput();
         loadRepo();
+    }
+
+    /** 清除输出日志 */
+    private void clearOutput() {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                outputDoc.remove(0, outputDoc.getLength());
+            } catch (BadLocationException ignored) {
+            }
+        });
     }
 
     /** 在列表中通过路径选中对应项 */
@@ -712,24 +723,21 @@ class GitRepoManager extends JFrame {
 
     // ── 仓库列表数据与渲染 ───────────────────────────────────
 
-    /** 仓库列表项：包装路径，提供名称和完整路径 */
+    /** 仓库列表项：包装路径，提供显示名称 */
     private static class RepoPathInfo {
         final String fullPath;
         final String displayName;
 
         RepoPathInfo(String fullPath) {
             this.fullPath = fullPath;
-            this.displayName = getDisplayName(fullPath);
+            this.displayName = getFolderName(fullPath);
         }
 
-        /** 从路径中提取简短的显示名称（最后两级目录） */
-        private static String getDisplayName(String path) {
-            Path p = Paths.get(path);
-            int nameCount = p.getNameCount();
-            if (nameCount >= 2) {
-                return p.subpath(nameCount - 2, nameCount).toString().replace("\\", "/");
-            }
-            return path;
+        /** 提取最后一级目录名作为显示名称 */
+        private static String getFolderName(String path) {
+            String normalized = path.replace("\\", "/");
+            int idx = normalized.lastIndexOf('/');
+            return idx >= 0 ? normalized.substring(idx + 1) : path;
         }
 
         @Override
@@ -738,7 +746,7 @@ class GitRepoManager extends JFrame {
         }
     }
 
-    /** 仓库列表的自定义单元格渲染器：两行显示（名称 + 路径） */
+    /** 仓库列表的自定义单元格渲染器：两行显示（仓库名称 + 绝对路径） */
     private static class RepoListCellRenderer extends JPanel implements ListCellRenderer<RepoPathInfo> {
         private final JLabel nameLabel = new JLabel();
         private final JLabel pathLabel = new JLabel();
