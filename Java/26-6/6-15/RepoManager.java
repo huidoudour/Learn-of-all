@@ -49,6 +49,16 @@ class GitRepoManager extends JFrame {
         outputDoc = outputPane.getStyledDocument();
         setupUI();
 
+        // 按 ESC 退出程序（TTY 下无窗口关闭按钮时有用）
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), "exit");
+        getRootPane().getActionMap().put("exit", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                System.exit(0);
+            }
+        });
+
         // 加载保存的仓库列表
         loadRepoList();
 
@@ -98,11 +108,11 @@ class GitRepoManager extends JFrame {
         panel.setBorder(BorderFactory.createEmptyBorder(10, 8, 10, 4));
 
         JLabel title = new JLabel("我的仓库");
-        title.setFont(new Font("微软雅黑", Font.BOLD, 14));
+        title.setFont(uiFont(Font.BOLD, 14));
         panel.add(title, BorderLayout.NORTH);
 
         // 仓库列表
-        repoJList.setFont(new Font("微软雅黑", Font.PLAIN, 12));
+        repoJList.setFont(uiFont(Font.PLAIN, 12));
         repoJList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         repoJList.setFixedCellHeight(48);
         repoJList.setBorder(BorderFactory.createLineBorder(new Color(0xDD, 0xDD, 0xDD)));
@@ -213,7 +223,16 @@ class GitRepoManager extends JFrame {
         statusBtn.addActionListener(e -> gitStatus());
         actionPanel.add(statusBtn);
 
-        centerPanel.add(actionPanel, BorderLayout.SOUTH);
+        // ── 退出按钮 ──
+        JPanel actionBottom = new JPanel(new BorderLayout());
+        JButton exitBtn = new JButton("退出");
+        exitBtn.addActionListener(e -> System.exit(0));
+        JPanel exitPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        exitPanel.add(exitBtn);
+        actionBottom.add(actionPanel, BorderLayout.CENTER);
+        actionBottom.add(exitPanel, BorderLayout.EAST);
+
+        centerPanel.add(actionBottom, BorderLayout.SOUTH);
 
         // ── 中间区域：上部分为信息/操作区，下部分为输出日志 ──
         JPanel middlePanel = new JPanel(new BorderLayout(0, 8));
@@ -225,7 +244,7 @@ class GitRepoManager extends JFrame {
         outPanel.setBorder(BorderFactory.createTitledBorder("输出日志"));
 
         outputPane.setEditable(false);
-        outputPane.setFont(new Font("Consolas", Font.PLAIN, 12));
+        outputPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
         JScrollPane scrollPane = new JScrollPane(outputPane);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         outPanel.add(scrollPane, BorderLayout.CENTER);
@@ -241,6 +260,12 @@ class GitRepoManager extends JFrame {
     }
 
     // ── 工具方法 ─────────────────────────────────────────────
+
+    /** 跨平台 UI 字体：Windows 用微软雅黑，Linux/Mac 用 SansSerif */
+    private static Font uiFont(int style, int size) {
+        String name = System.getProperty("os.name").toLowerCase().contains("win") ? "微软雅黑" : "SansSerif";
+        return new Font(name, style, size);
+    }
 
     private void log(String text) {
         SwingUtilities.invokeLater(() -> {
@@ -755,8 +780,8 @@ class GitRepoManager extends JFrame {
             setLayout(new BorderLayout(0, 0));
             setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
 
-            nameLabel.setFont(new Font("微软雅黑", Font.BOLD, 12));
-            pathLabel.setFont(new Font("Consolas", Font.PLAIN, 10));
+            nameLabel.setFont(uiFont(Font.BOLD, 12));
+            pathLabel.setFont(new Font("Monospaced", Font.PLAIN, 10));
             pathLabel.setForeground(new Color(0x88, 0x88, 0x88));
 
             JPanel textPanel = new JPanel(new BorderLayout(0, 1));
