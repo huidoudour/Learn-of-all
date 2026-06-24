@@ -40,6 +40,17 @@ class GitRepoManager extends JFrame {
     private final JList<RepoPathInfo> repoJList = new JList<>(repoListModel);
     private final java.util.List<String> repoPaths = new ArrayList<>();
 
+    // ── 终端（真实 Shell 进程） ──
+    private Process shellProcess;
+    private BufferedWriter shellStdin;
+    private Thread shellReaderThread;
+    private volatile boolean shellRunning;
+    private final JTextPane terminalPane = new JTextPane();
+    private final StyledDocument terminalDoc;
+    private JTextField terminalInput;
+    private final java.util.List<String> cmdHistory = new ArrayList<>();
+    private int cmdHistoryIndex = -1;
+
     public GitRepoManager() {
         setTitle("Git 仓库管理工具");
         setSize(960, 620);
@@ -47,6 +58,7 @@ class GitRepoManager extends JFrame {
         setLocationRelativeTo(null);
 
         outputDoc = outputPane.getStyledDocument();
+        terminalDoc = terminalPane.getStyledDocument();
         setupUI();
 
         // 按 ESC 退出程序（TTY 下无窗口关闭按钮时有用）
@@ -56,6 +68,14 @@ class GitRepoManager extends JFrame {
             @Override
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 System.exit(0);
+            }
+        });
+
+        // 窗口关闭时清理 shell 进程
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                stopShell();
             }
         });
 
@@ -239,22 +259,98 @@ class GitRepoManager extends JFrame {
 
         middlePanel.add(centerPanel, BorderLayout.NORTH);
 
-        // ── 输出区 ──
+        // ── 输出日志 + 终端（上下分栏） ──
+        JSplitPane logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        logSplit.setBorder(null);
+        logSplit.setDividerSize(5);
+        logSplit.setResizeWeight(0.5);
+        logSplit.setDividerLocation(180);
+
+        // ── 上半：输出日志 ──
         JPanel outPanel = new JPanel(new BorderLayout());
         outPanel.setBorder(BorderFactory.createTitledBorder("输出日志"));
-
         outputPane.setEditable(false);
         outputPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        JScrollPane scrollPane = new JScrollPane(outputPane);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        outPanel.add(scrollPane, BorderLayout.CENTER);
+        JScrollPane logScroll = new JScrollPane(outputPane);
+        logScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        outPanel.add(logScroll, BorderLayout.CENTER);
 
-        middlePanel.add(outPanel, BorderLayout.CENTER);
+        // 清空日志按钮
+        JButton clearLogBtn = new JButton("清空");
+        clearLogBtn.setFont(uiFont(Font.PLAIN, 11));
+        clearLogBtn.setFocusPainted(false);
+        clearLogBtn.addActionListener(e -> clearOutput());
+        JPanel logTopBar = new JPanel(new BorderLayout());
+        logTopBar.add(clearLogBtn, BorderLayout.EAST);
+        logTopBar.setOpaque(false);
+        outPanel.add(logTopBar, BorderLayout.NORTH);
+
+        logSplit.setTopComponent(outPanel);
+
+        // ── 下半：终端 ──
+        JPanel termPanel = new JPanel(new BorderLayout(0, 4));
+        termPanel.setBorder(BorderFactory.createTitledBorder("终端"));
+
+        terminalPane.setEditable(false);
+        terminalPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        terminalPane.setBackground(new Color(0x1E, 0x1E, 0x1E));
+        terminalPane.setForeground(new Color(0xD4, 0xD4, 0xD4));
+        JScrollPane termScroll = new JScrollPane(terminalPane);
+        termScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        termPanel.add(termScroll, BorderLayout.CENTER);
+
+        // ── 终端输入栏 ──
+        JPanel termInputBar = new JPanel(new BorderLayout(4, 0));
+        termInputBar.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
+
+        JLabel promptLabel = new JLabel(" » ");
+        promptLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
+        promptLabel.setForeground(new Color(0x22, 0xCC, 0x22));
+
+        terminalInput = new JTextField();
+        terminalInput.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        terminalInput.setBackground(new Color(0x2D, 0x2D, 0x2D));
+        terminalInput.setForeground(new Color(0xD4, 0xD4, 0xD4));
+        terminalInput.setCaretColor(new Color(0xD4, 0xD4, 0xD4));
+        terminalInput.setToolTipText("输入命令后按 Enter 发送到终端（↑↓浏览历史）");
+
+        JButton sendBtn = new JButton("发送");
+        sendBtn.setFont(uiFont(Font.PLAIN, 12));
+        sendBtn.setFocusPainted(false);
+
+        termInputBar.add(promptLabel, BorderLayout.WEST);
+        termInputBar.add(terminalInput, BorderLayout.CENTER);
+        JPanel termBtnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        termBtnPanel.add(sendBtn);
+        termInputBar.add(termBtnPanel, BorderLayout.EAST);
+
+        termPanel.add(termInputBar, BorderLayout.SOUTH);
+
+        logSplit.setBottomComponent(termPanel);
+
+        middlePanel.add(logSplit, BorderLayout.CENTER);
 
         main.add(middlePanel, BorderLayout.CENTER);
 
         // ── 事件绑定 ──
         loadBtn.addActionListener(e -> loadRepo());
+
+        // ── 终端事件 ──
+        terminalInput.addActionListener(e -> sendToShell(terminalInput.getText()));
+        sendBtn.addActionListener(e -> sendToShell(terminalInput.getText()));
+
+        terminalInput.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyPressed(java.awt.event.KeyEvent e) {
+                if (e.getKeyCode() == java.awt.event.KeyEvent.VK_UP) {
+                    navigateHistory(-1);
+                    e.consume();
+                } else if (e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
+                    navigateHistory(1);
+                    e.consume();
+                }
+            }
+        });
 
         return main;
     }
@@ -396,6 +492,9 @@ class GitRepoManager extends JFrame {
         selectRepoInList(path);
 
         listRemotes();
+
+        // 在仓库目录启动终端 Shell
+        startShell(path);
     }
 
     private void listRemotes() {
@@ -711,6 +810,218 @@ class GitRepoManager extends JFrame {
             } catch (BadLocationException ignored) {
             }
         });
+    }
+
+    // ── 终端（真实 Shell 进程） ─────────────────────────────
+
+    /** 获取当前系统的 shell 命令 */
+    private String[] getShellCommand() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            // Windows：尝试用 PowerShell（比 cmd 功能更强）
+            return new String[]{"powershell.exe", "-NoLogo", "-NoExit", "-Command", "-"};
+        } else {
+            // Linux / macOS
+            return new String[]{"/bin/bash", "--noediting"};
+        }
+    }
+
+    /** 获取 shell 的类型名（仅用于显示） */
+    private String getShellName() {
+        String os = System.getProperty("os.name").toLowerCase();
+        return os.contains("win") ? "PowerShell" : "bash";
+    }
+
+    /** 启动/重启 Shell 进程 */
+    private void startShell(String workingDir) {
+        stopShell(); // 先停旧的
+
+        appendTerminal("╔══ 启动 " + getShellName() + " 终端");
+        if (workingDir != null && !workingDir.isEmpty()) {
+            appendTerminal("║  工作目录: " + workingDir);
+        }
+        appendTerminal("╚══ 输入 exit 可关闭终端");
+
+        try {
+            String[] cmd = getShellCommand();
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            if (workingDir != null && !workingDir.isEmpty()) {
+                File dir = new File(workingDir);
+                if (dir.isDirectory()) {
+                    pb.directory(dir);
+                }
+            }
+            pb.redirectErrorStream(true);
+
+            shellProcess = pb.start();
+            shellStdin = new BufferedWriter(new OutputStreamWriter(
+                    shellProcess.getOutputStream(), StandardCharsets.UTF_8));
+            shellRunning = true;
+
+            // 读取线程：持续读取 shell 输出并显示到终端面板
+            shellReaderThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(shellProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                    char[] buf = new char[4096];
+                    int len;
+                    while (shellRunning && (len = reader.read(buf)) != -1) {
+                        String text = new String(buf, 0, len);
+                        appendTerminalRaw(text);
+                    }
+                } catch (IOException e) {
+                    if (shellRunning) {
+                        appendTerminal("⚠ 终端读取错误: " + e.getMessage());
+                    }
+                } finally {
+                    shellRunning = false;
+                }
+            }, "shell-reader");
+            shellReaderThread.setDaemon(true);
+            shellReaderThread.start();
+
+            setStatus(getShellName() + " 已就绪");
+
+        } catch (IOException e) {
+            appendTerminal("❌ 启动 Shell 失败: " + e.getMessage());
+            log("❌ 启动 Shell 失败: " + e.getMessage());
+            shellRunning = false;
+        }
+    }
+
+    /** 停止 Shell 进程 */
+    private void stopShell() {
+        shellRunning = false;
+        if (shellStdin != null) {
+            try {
+                shellStdin.close();
+            } catch (IOException ignored) {
+            }
+            shellStdin = null;
+        }
+        if (shellProcess != null) {
+            shellProcess.destroyForcibly();
+            try {
+                shellProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            shellProcess = null;
+        }
+        if (shellReaderThread != null) {
+            shellReaderThread.interrupt();
+            shellReaderThread = null;
+        }
+    }
+
+    /** 发送命令到 Shell 终端 */
+    private void sendToShell(String input) {
+        if (input == null || input.trim().isEmpty()) return;
+
+        String cmd = input.trim();
+
+        // 加入历史
+        if (cmdHistory.isEmpty() || !cmdHistory.get(cmdHistory.size() - 1).equals(cmd)) {
+            cmdHistory.add(cmd);
+        }
+        cmdHistoryIndex = -1;
+
+        // 清空输入框
+        SwingUtilities.invokeLater(() -> {
+            terminalInput.setText("");
+            terminalInput.requestFocusInWindow();
+        });
+
+        // 如果 shell 未运行，尝试启动
+        if (shellProcess == null || !shellProcess.isAlive()) {
+            startShell(getRepoPath());
+            // 等一小会儿让 shell 启动
+            try { Thread.sleep(300); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        if (shellStdin != null) {
+            try {
+                shellStdin.write(cmd);
+                shellStdin.newLine();
+                shellStdin.flush();
+            } catch (IOException e) {
+                appendTerminal("❌ 发送命令失败: " + e.getMessage());
+                // 尝试重启
+                startShell(getRepoPath());
+            }
+        } else {
+            appendTerminal("❌ 终端未连接");
+        }
+    }
+
+    /** 向终端面板追加文本（按行分割，带颜色） */
+    private void appendTerminal(String text) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                StyleContext sc = new StyleContext();
+                Style style = sc.addStyle("term", null);
+                StyleConstants.setForeground(style, new Color(0xD4, 0xD4, 0xD4));
+                StyleConstants.setFontSize(style, 12);
+                StyleConstants.setFontFamily(style, "Monospaced");
+
+                if (text.startsWith("╔") || text.startsWith("║") || text.startsWith("╚")) {
+                    StyleConstants.setForeground(style, new Color(0x56, 0x98, 0x69));
+                } else if (text.startsWith("❌")) {
+                    StyleConstants.setForeground(style, new Color(0xF4, 0x47, 0x47));
+                } else if (text.startsWith("⚠")) {
+                    StyleConstants.setForeground(style, new Color(0xD7, 0x99, 0x21));
+                }
+
+                terminalDoc.insertString(terminalDoc.getLength(), text + "\n", style);
+                terminalPane.setCaretPosition(terminalDoc.getLength());
+            } catch (BadLocationException ignored) {
+            }
+        });
+    }
+
+    /** 向终端面板追加原始文本（不额外加换行，用于实时输出） */
+    private void appendTerminalRaw(String text) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                StyleContext sc = new StyleContext();
+                Style style = sc.addStyle("term", null);
+                StyleConstants.setForeground(style, new Color(0xD4, 0xD4, 0xD4));
+                StyleConstants.setFontSize(style, 12);
+                StyleConstants.setFontFamily(style, "Monospaced");
+
+                terminalDoc.insertString(terminalDoc.getLength(), text, style);
+                terminalPane.setCaretPosition(terminalDoc.getLength());
+            } catch (BadLocationException ignored) {
+            }
+        });
+    }
+
+    /** 上下键浏览命令历史 */
+    private void navigateHistory(int direction) {
+        if (cmdHistory.isEmpty()) return;
+
+        int newIndex = cmdHistoryIndex;
+
+        if (direction < 0) {
+            if (newIndex == -1) {
+                newIndex = cmdHistory.size() - 1;
+            } else if (newIndex > 0) {
+                newIndex--;
+            }
+        } else {
+            if (newIndex == -1) {
+                return;
+            } else if (newIndex < cmdHistory.size() - 1) {
+                newIndex++;
+            } else {
+                newIndex = -1;
+            }
+        }
+
+        cmdHistoryIndex = newIndex;
+        String text = newIndex == -1 ? "" : cmdHistory.get(newIndex);
+        SwingUtilities.invokeLater(() -> terminalInput.setText(text));
     }
 
     /** 在列表中通过路径选中对应项 */
