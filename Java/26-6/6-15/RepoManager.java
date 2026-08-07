@@ -40,16 +40,18 @@ class GitRepoManager extends JFrame {
     private final JList<RepoPathInfo> repoJList = new JList<>(repoListModel);
     private final java.util.List<String> repoPaths = new ArrayList<>();
 
-    // ── 终端（真实 Shell 进程） ──
+    // ── 嵌入式 Shell 进程 ──
     private Process shellProcess;
     private BufferedWriter shellStdin;
     private Thread shellReaderThread;
     private volatile boolean shellRunning;
-    private final JTextPane terminalPane = new JTextPane();
-    private final StyledDocument terminalDoc;
-    private JTextField terminalInput;
     private final java.util.List<String> cmdHistory = new ArrayList<>();
     private int cmdHistoryIndex = -1;
+    private JTextField shellInputField;               // 命令输入行
+    private final StringBuilder terminalBuffer = new StringBuilder(); // 输出缓冲区
+    private javax.swing.Timer terminalFlushTimer;     // 批量刷新定时器
+    private static final java.util.regex.Pattern ANSI_PATTERN =
+            java.util.regex.Pattern.compile("\u001B(?:[@-Z\\-_]|\\[[0-?]*[ -/]*[@-~])");
 
     public GitRepoManager() {
         setTitle("Git 仓库管理工具");
@@ -58,20 +60,14 @@ class GitRepoManager extends JFrame {
         setLocationRelativeTo(null);
 
         outputDoc = outputPane.getStyledDocument();
-        terminalDoc = terminalPane.getStyledDocument();
+
+        // 终端输出缓冲定时器：每 50ms 批量 flush，减少 EDT 调用
+        terminalFlushTimer = new javax.swing.Timer(50, e -> flushTerminalBuffer());
+        terminalFlushTimer.setRepeats(false);
+
         setupUI();
 
-        // 按 ESC 退出程序（TTY 下无窗口关闭按钮时有用）
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-                .put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), "exit");
-        getRootPane().getActionMap().put("exit", new AbstractAction() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                System.exit(0);
-            }
-        });
-
-        // 窗口关闭时清理 shell 进程
+        // 窗口关闭时清理 PowerShell 进程
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent e) {
@@ -91,7 +87,7 @@ class GitRepoManager extends JFrame {
                 selectRepoInList(lastRepo);
                 SwingUtilities.invokeLater(this::loadRepo);
             } else {
-                log("⚠ 上次的仓库路径已失效: " + lastRepo);
+                log("[警告] 上次的仓库路径已失效: " + lastRepo);
                 prefs.remove(PREF_KEY_LAST_REPO);
             }
         }
@@ -259,23 +255,35 @@ class GitRepoManager extends JFrame {
 
         middlePanel.add(centerPanel, BorderLayout.NORTH);
 
-        // ── 输出日志 + 终端（上下分栏） ──
-        JSplitPane logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        logSplit.setBorder(null);
-        logSplit.setDividerSize(5);
-        logSplit.setResizeWeight(0.5);
-        logSplit.setDividerLocation(180);
+        // ── 终端区：只读输出 + 独立命令输入行 ──
+        JPanel terminalPanel = new JPanel(new BorderLayout());
+        terminalPanel.setBorder(BorderFactory.createTitledBorder("终端"));
 
-        // ── 上半：输出日志 ──
-        JPanel outPanel = new JPanel(new BorderLayout());
-        outPanel.setBorder(BorderFactory.createTitledBorder("输出日志"));
+        // 上方：只读输出区域
         outputPane.setEditable(false);
-        outputPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        outputPane.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        outputPane.setBackground(new Color(0x0C, 0x0C, 0x0C));
+        outputPane.setForeground(new Color(0xCC, 0xCC, 0xCC));
+        outputPane.setCaretColor(new Color(0xCC, 0xCC, 0xCC));
         JScrollPane logScroll = new JScrollPane(outputPane);
         logScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        outPanel.add(logScroll, BorderLayout.CENTER);
+        logScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
-        // 清空日志按钮
+        // 下方：命令输入行
+        shellInputField = new JTextField();
+        shellInputField.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        shellInputField.setBackground(new Color(0x0C, 0x0C, 0x0C));
+        shellInputField.setForeground(new Color(0xCC, 0xCC, 0xCC));
+        shellInputField.setCaretColor(new Color(0xCC, 0xCC, 0xCC));
+        shellInputField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0x33, 0x33, 0x33)),
+                BorderFactory.createEmptyBorder(4, 6, 4, 6)));
+        shellInputField.setEnabled(false); // 未连接 shell 前禁用
+
+        terminalPanel.add(logScroll, BorderLayout.CENTER);
+        terminalPanel.add(shellInputField, BorderLayout.SOUTH);
+
+        // 清空按钮
         JButton clearLogBtn = new JButton("清空");
         clearLogBtn.setFont(uiFont(Font.PLAIN, 11));
         clearLogBtn.setFocusPainted(false);
@@ -283,71 +291,35 @@ class GitRepoManager extends JFrame {
         JPanel logTopBar = new JPanel(new BorderLayout());
         logTopBar.add(clearLogBtn, BorderLayout.EAST);
         logTopBar.setOpaque(false);
-        outPanel.add(logTopBar, BorderLayout.NORTH);
+        terminalPanel.add(logTopBar, BorderLayout.NORTH);
 
-        logSplit.setTopComponent(outPanel);
-
-        // ── 下半：终端 ──
-        JPanel termPanel = new JPanel(new BorderLayout(0, 4));
-        termPanel.setBorder(BorderFactory.createTitledBorder("终端"));
-
-        terminalPane.setEditable(false);
-        terminalPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        terminalPane.setBackground(new Color(0x1E, 0x1E, 0x1E));
-        terminalPane.setForeground(new Color(0xD4, 0xD4, 0xD4));
-        JScrollPane termScroll = new JScrollPane(terminalPane);
-        termScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        termPanel.add(termScroll, BorderLayout.CENTER);
-
-        // ── 终端输入栏 ──
-        JPanel termInputBar = new JPanel(new BorderLayout(4, 0));
-        termInputBar.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
-
-        JLabel promptLabel = new JLabel(" » ");
-        promptLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
-        promptLabel.setForeground(new Color(0x22, 0xCC, 0x22));
-
-        terminalInput = new JTextField();
-        terminalInput.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        terminalInput.setBackground(new Color(0x2D, 0x2D, 0x2D));
-        terminalInput.setForeground(new Color(0xD4, 0xD4, 0xD4));
-        terminalInput.setCaretColor(new Color(0xD4, 0xD4, 0xD4));
-        terminalInput.setToolTipText("输入命令后按 Enter 发送到终端（↑↓浏览历史）");
-
-        JButton sendBtn = new JButton("发送");
-        sendBtn.setFont(uiFont(Font.PLAIN, 12));
-        sendBtn.setFocusPainted(false);
-
-        termInputBar.add(promptLabel, BorderLayout.WEST);
-        termInputBar.add(terminalInput, BorderLayout.CENTER);
-        JPanel termBtnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        termBtnPanel.add(sendBtn);
-        termInputBar.add(termBtnPanel, BorderLayout.EAST);
-
-        termPanel.add(termInputBar, BorderLayout.SOUTH);
-
-        logSplit.setBottomComponent(termPanel);
-
-        middlePanel.add(logSplit, BorderLayout.CENTER);
+        middlePanel.add(terminalPanel, BorderLayout.CENTER);
 
         main.add(middlePanel, BorderLayout.CENTER);
 
         // ── 事件绑定 ──
         loadBtn.addActionListener(e -> loadRepo());
 
-        // ── 终端事件 ──
-        terminalInput.addActionListener(e -> sendToShell(terminalInput.getText()));
-        sendBtn.addActionListener(e -> sendToShell(terminalInput.getText()));
-
-        terminalInput.addKeyListener(new java.awt.event.KeyAdapter() {
+        // ── 输入框键盘：Enter 发送命令，↑↓ 浏览历史，Ctrl+L 清屏 ──
+        shellInputField.addKeyListener(new java.awt.event.KeyAdapter() {
             @Override
             public void keyPressed(java.awt.event.KeyEvent e) {
-                if (e.getKeyCode() == java.awt.event.KeyEvent.VK_UP) {
+                if (e.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER) {
+                    e.consume();
+                    String cmd = shellInputField.getText().trim();
+                    if (!cmd.isEmpty()) {
+                        sendToShell(cmd);
+                    }
+                } else if (e.getKeyCode() == java.awt.event.KeyEvent.VK_UP) {
+                    e.consume();
                     navigateHistory(-1);
-                    e.consume();
                 } else if (e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
-                    navigateHistory(1);
                     e.consume();
+                    navigateHistory(1);
+                } else if (e.getKeyCode() == java.awt.event.KeyEvent.VK_L
+                        && (e.getModifiersEx() & java.awt.event.InputEvent.CTRL_DOWN_MASK) != 0) {
+                    e.consume();
+                    clearOutput();
                 }
             }
         });
@@ -364,26 +336,24 @@ class GitRepoManager extends JFrame {
     }
 
     private void log(String text) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                StyleContext sc = new StyleContext();
-                Style style = sc.addStyle("default", null);
-                if (text.startsWith("❌") || text.startsWith("⚠")) {
-                    StyleConstants.setForeground(style, new Color(0xCC, 0x33, 0x33));
-                } else if (text.startsWith("📂") || text.startsWith("🌐") || text.startsWith("ℹ")) {
-                    StyleConstants.setForeground(style, new Color(0x22, 0x66, 0xCC));
-                } else if (text.startsWith("$")) {
-                    StyleConstants.setForeground(style, new Color(0x66, 0x66, 0x66));
-                    StyleConstants.setBold(style, true);
-                } else if (text.startsWith("──")) {
-                    StyleConstants.setForeground(style, new Color(0x88, 0x88, 0x88));
-                }
-                outputDoc.insertString(outputDoc.getLength(), text + "\n", style);
-                // 滚动到底部
-                outputPane.setCaretPosition(outputDoc.getLength());
-            } catch (BadLocationException ignored) {
+        // 同步写入（始终在 EDT 调用，无需 invokeLater）
+        try {
+            StyleContext sc = new StyleContext();
+            Style style = sc.addStyle("default", null);
+            if (text.startsWith("[错误]") || text.startsWith("[警告]")) {
+                StyleConstants.setForeground(style, new Color(0xCC, 0x33, 0x33));
+            } else if (text.startsWith("[信息]")) {
+                StyleConstants.setForeground(style, new Color(0x22, 0x66, 0xCC));
+            } else if (text.startsWith("$")) {
+                StyleConstants.setForeground(style, new Color(0x66, 0x66, 0x66));
+                StyleConstants.setBold(style, true);
+            } else if (text.startsWith("──")) {
+                StyleConstants.setForeground(style, new Color(0x88, 0x88, 0x88));
             }
-        });
+            outputDoc.insertString(outputDoc.getLength(), text + "\n", style);
+            outputPane.setCaretPosition(outputDoc.getLength());
+        } catch (BadLocationException ignored) {
+        }
     }
 
     private void setStatus(String text) {
@@ -432,21 +402,21 @@ class GitRepoManager extends JFrame {
 
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                log("⚠ 退出码: " + exitCode);
+                log("[警告] 退出码: " + exitCode);
             }
             setStatus(exitCode == 0 ? "完成" : "出错");
             return new GitResult(exitCode, stdout.toString(), stderr.toString());
 
         } catch (FileNotFoundException e) {
-            log("❌ 未找到 git 命令，请确认已安装 Git");
+            log("[错误] 未找到 git 命令，请确认已安装 Git");
             setStatus("错误");
             return new GitResult(-1, "", "git not found");
         } catch (IOException e) {
-            log("❌ I/O 错误: " + e.getMessage());
+            log("[错误] I/O 错误: " + e.getMessage());
             setStatus("错误");
             return new GitResult(-1, "", e.getMessage());
         } catch (InterruptedException e) {
-            log("⏱ 命令执行被中断");
+            log("[超时] 命令执行被中断");
             setStatus("中断");
             Thread.currentThread().interrupt();
             return new GitResult(-1, "", e.getMessage());
@@ -481,7 +451,7 @@ class GitRepoManager extends JFrame {
         }
         // 保存路径以便下次启动时恢复
         prefs.put(PREF_KEY_LAST_REPO, path);
-        log("📂 已加载仓库: " + path);
+        log("[信息] 已加载仓库: " + path);
 
         // 自动加入左侧列表
         if (!repoPaths.contains(path)) {
@@ -493,7 +463,10 @@ class GitRepoManager extends JFrame {
 
         listRemotes();
 
-        // 在仓库目录启动终端 Shell
+        // 清空终端，启动纯 PowerShell（不混入任何日志）
+        try {
+            outputDoc.remove(0, outputDoc.getLength());
+        } catch (BadLocationException ignored) {}
         startShell(path);
     }
 
@@ -523,14 +496,14 @@ class GitRepoManager extends JFrame {
                 remoteInfoLabel.setText(sb.toString());
 
                 StringBuilder logSb = new StringBuilder();
-                logSb.append("🌐 远程仓库 (").append(seen.size()).append(" 个):");
+                logSb.append("远程仓库 (").append(seen.size()).append(" 个):");
                 for (var entry : seen.entrySet()) {
                     logSb.append("\n  ").append(entry.getKey()).append("  →  ").append(entry.getValue());
                 }
                 log(logSb.toString());
             } else {
-                remoteInfoLabel.setText("⚠ 没有配置远程仓库");
-                log("⚠ 没有配置远程仓库");
+                remoteInfoLabel.setText("没有配置远程仓库");
+                log("[警告] 没有配置远程仓库");
             }
         } catch (Exception ignored) {
         }
@@ -590,10 +563,7 @@ class GitRepoManager extends JFrame {
     private void gitPull() {
         if (!checkRepo()) return;
         log("── 拉取开始 ──");
-        try {
-            runGit("pull", "--all");
-        } catch (Exception ignored) {
-        }
+        try { runGit("pull", "--all"); } catch (Exception ignored) {}
         log("── 拉取结束 ──");
     }
 
@@ -603,28 +573,26 @@ class GitRepoManager extends JFrame {
         try {
             runGit("push", "--all");
             runGit("push", "--tags");
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
         log("── 推送结束 ──");
     }
 
     private void gitCommit() {
         if (!checkRepo()) return;
-        log("── 提交开始 ──");
         try {
-            // 先检查是否有变更
+            // 先检查是否有变更（保留同步检查）
             GitResult statusResult = runGit("status", "--porcelain");
             if (statusResult.exitCode != 0) return;
             if (statusResult.stdout.trim().isEmpty()) {
                 JOptionPane.showMessageDialog(this, "没有检测到需要提交的变更", "提示", JOptionPane.INFORMATION_MESSAGE);
-                log("ℹ 没有变更需要提交");
+                log("[信息] 没有变更需要提交");
                 return;
             }
 
             // 询问提交信息
             String msg = JOptionPane.showInputDialog(this, "请输入提交信息:", "提交", JOptionPane.PLAIN_MESSAGE);
             if (msg == null || msg.trim().isEmpty()) {
-                log("❌ 提交已取消");
+                log("[错误] 提交已取消");
                 return;
             }
 
@@ -639,16 +607,12 @@ class GitRepoManager extends JFrame {
             }
         } catch (Exception ignored) {
         }
-        log("── 提交结束 ──");
     }
 
     private void gitStatus() {
         if (!checkRepo()) return;
         log("── 仓库状态 ──");
-        try {
-            runGit("status");
-        } catch (Exception ignored) {
-        }
+        try { runGit("status"); } catch (Exception ignored) {}
         log("── 状态结束 ──");
     }
 
@@ -670,7 +634,7 @@ class GitRepoManager extends JFrame {
             String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
             parseRepoJson(content);
         } catch (IOException e) {
-            log("⚠ 读取 " + REPO_JSON_FILE + " 失败: " + e.getMessage());
+            log("[警告] 读取 " + REPO_JSON_FILE + " 失败: " + e.getMessage());
         }
     }
 
@@ -721,7 +685,7 @@ class GitRepoManager extends JFrame {
         try {
             Files.write(repoJsonFile().toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            log("⚠ 写入 " + REPO_JSON_FILE + " 失败: " + e.getMessage());
+            log("[警告] 写入 " + REPO_JSON_FILE + " 失败: " + e.getMessage());
         }
     }
 
@@ -761,7 +725,7 @@ class GitRepoManager extends JFrame {
         repoListModel.addElement(new RepoPathInfo(path));
         saveRepoList();
         selectRepoInList(path);
-        log("📂 已添加仓库到列表: " + path);
+        log("[信息] 已添加仓库到列表: " + path);
     }
 
     /** 从列表中删除选中的仓库 */
@@ -779,7 +743,7 @@ class GitRepoManager extends JFrame {
         repoPaths.remove(idx);
         repoListModel.remove(idx);
         saveRepoList();
-        log("🗑 已从列表中移除仓库");
+        log("[信息] 已从列表中移除仓库");
     }
 
     /** 切换到列表中选中的仓库 */
@@ -794,7 +758,7 @@ class GitRepoManager extends JFrame {
 
         if (!new File(path, ".git").isDirectory()) {
             JOptionPane.showMessageDialog(this, "该仓库路径已失效（找不到 .git 目录）", "错误", JOptionPane.ERROR_MESSAGE);
-            log("⚠ 仓库路径已失效: " + path);
+            log("[警告] 仓库路径已失效: " + path);
             return;
         }
 
@@ -804,52 +768,37 @@ class GitRepoManager extends JFrame {
 
     /** 清除输出日志 */
     private void clearOutput() {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                outputDoc.remove(0, outputDoc.getLength());
-            } catch (BadLocationException ignored) {
-            }
-        });
+        try {
+            outputDoc.remove(0, outputDoc.getLength());
+        } catch (BadLocationException ignored) {
+        }
     }
 
-    // ── 终端（真实 Shell 进程） ─────────────────────────────
+    // ── 嵌入式 Shell ──────────────────────────────────
 
     /** 获取当前系统的 shell 命令 */
     private String[] getShellCommand() {
         String os = System.getProperty("os.name").toLowerCase();
         if (os.contains("win")) {
-            // Windows：尝试用 PowerShell（比 cmd 功能更强）
             return new String[]{"powershell.exe", "-NoLogo", "-NoExit", "-Command", "-"};
         } else {
-            // Linux / macOS
-            return new String[]{"/bin/bash", "--noediting"};
+            return new String[]{"/bin/bash", "--norc"};
         }
     }
 
-    /** 获取 shell 的类型名（仅用于显示） */
-    private String getShellName() {
-        String os = System.getProperty("os.name").toLowerCase();
-        return os.contains("win") ? "PowerShell" : "bash";
+    /** 剥离 ANSI 转义码 */
+    private static String stripAnsi(String text) {
+        return ANSI_PATTERN.matcher(text).replaceAll("");
     }
 
-    /** 启动/重启 Shell 进程 */
+    /** 启动嵌入式 Shell 进程 */
     private void startShell(String workingDir) {
-        stopShell(); // 先停旧的
-
-        appendTerminal("╔══ 启动 " + getShellName() + " 终端");
-        if (workingDir != null && !workingDir.isEmpty()) {
-            appendTerminal("║  工作目录: " + workingDir);
-        }
-        appendTerminal("╚══ 输入 exit 可关闭终端");
-
+        stopShell();
         try {
-            String[] cmd = getShellCommand();
-            ProcessBuilder pb = new ProcessBuilder(cmd);
+            ProcessBuilder pb = new ProcessBuilder(getShellCommand());
             if (workingDir != null && !workingDir.isEmpty()) {
                 File dir = new File(workingDir);
-                if (dir.isDirectory()) {
-                    pb.directory(dir);
-                }
+                if (dir.isDirectory()) pb.directory(dir);
             }
             pb.redirectErrorStream(true);
 
@@ -858,7 +807,7 @@ class GitRepoManager extends JFrame {
                     shellProcess.getOutputStream(), StandardCharsets.UTF_8));
             shellRunning = true;
 
-            // 读取线程：持续读取 shell 输出并显示到终端面板
+            // 输出读取线程
             shellReaderThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(shellProcess.getInputStream(), StandardCharsets.UTF_8))) {
@@ -868,10 +817,7 @@ class GitRepoManager extends JFrame {
                         String text = new String(buf, 0, len);
                         appendTerminalRaw(text);
                     }
-                } catch (IOException e) {
-                    if (shellRunning) {
-                        appendTerminal("⚠ 终端读取错误: " + e.getMessage());
-                    }
+                } catch (IOException ignored) {
                 } finally {
                     shellRunning = false;
                 }
@@ -879,12 +825,11 @@ class GitRepoManager extends JFrame {
             shellReaderThread.setDaemon(true);
             shellReaderThread.start();
 
-            setStatus(getShellName() + " 已就绪");
+            SwingUtilities.invokeLater(() -> shellInputField.setEnabled(true));
+            setStatus("终端已就绪");
 
         } catch (IOException e) {
-            appendTerminal("❌ 启动 Shell 失败: " + e.getMessage());
-            log("❌ 启动 Shell 失败: " + e.getMessage());
-            shellRunning = false;
+            log("[错误] 启动 Shell 失败: " + e.getMessage());
         }
     }
 
@@ -892,17 +837,12 @@ class GitRepoManager extends JFrame {
     private void stopShell() {
         shellRunning = false;
         if (shellStdin != null) {
-            try {
-                shellStdin.close();
-            } catch (IOException ignored) {
-            }
+            try { shellStdin.close(); } catch (IOException ignored) {}
             shellStdin = null;
         }
         if (shellProcess != null) {
             shellProcess.destroyForcibly();
-            try {
-                shellProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {
+            try { shellProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
             shellProcess = null;
@@ -911,13 +851,15 @@ class GitRepoManager extends JFrame {
             shellReaderThread.interrupt();
             shellReaderThread = null;
         }
+        if (terminalFlushTimer != null) {
+            terminalFlushTimer.stop();
+        }
+        SwingUtilities.invokeLater(() -> shellInputField.setEnabled(false));
     }
 
-    /** 发送命令到 Shell 终端 */
-    private void sendToShell(String input) {
-        if (input == null || input.trim().isEmpty()) return;
-
-        String cmd = input.trim();
+    /** 发送命令到 Shell */
+    private void sendToShell(String cmd) {
+        if (cmd.isEmpty()) return;
 
         // 加入历史
         if (cmdHistory.isEmpty() || !cmdHistory.get(cmdHistory.size() - 1).equals(cmd)) {
@@ -926,102 +868,85 @@ class GitRepoManager extends JFrame {
         cmdHistoryIndex = -1;
 
         // 清空输入框
-        SwingUtilities.invokeLater(() -> {
-            terminalInput.setText("");
-            terminalInput.requestFocusInWindow();
-        });
+        shellInputField.setText("");
 
-        // 如果 shell 未运行，尝试启动
+        // shell 已死则异步重启，不阻塞 EDT（命令静默丢弃，用户在新 shell 中重输）
         if (shellProcess == null || !shellProcess.isAlive()) {
-            startShell(getRepoPath());
-            // 等一小会儿让 shell 启动
-            try { Thread.sleep(300); } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
+            new Thread(() -> startShell(getRepoPath()), "shell-restart").start();
         }
 
+        // 发送命令
         if (shellStdin != null) {
             try {
                 shellStdin.write(cmd);
                 shellStdin.newLine();
                 shellStdin.flush();
             } catch (IOException e) {
-                appendTerminal("❌ 发送命令失败: " + e.getMessage());
-                // 尝试重启
-                startShell(getRepoPath());
+                log("[错误] 发送命令失败: " + e.getMessage());
+                new Thread(() -> startShell(getRepoPath()), "shell-restart").start();
             }
-        } else {
-            appendTerminal("❌ 终端未连接");
         }
     }
 
-    /** 向终端面板追加文本（按行分割，带颜色） */
-    private void appendTerminal(String text) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                StyleContext sc = new StyleContext();
-                Style style = sc.addStyle("term", null);
-                StyleConstants.setForeground(style, new Color(0xD4, 0xD4, 0xD4));
-                StyleConstants.setFontSize(style, 12);
-                StyleConstants.setFontFamily(style, "Monospaced");
-
-                if (text.startsWith("╔") || text.startsWith("║") || text.startsWith("╚")) {
-                    StyleConstants.setForeground(style, new Color(0x56, 0x98, 0x69));
-                } else if (text.startsWith("❌")) {
-                    StyleConstants.setForeground(style, new Color(0xF4, 0x47, 0x47));
-                } else if (text.startsWith("⚠")) {
-                    StyleConstants.setForeground(style, new Color(0xD7, 0x99, 0x21));
-                }
-
-                terminalDoc.insertString(terminalDoc.getLength(), text + "\n", style);
-                terminalPane.setCaretPosition(terminalDoc.getLength());
-            } catch (BadLocationException ignored) {
+    /** 追加 Shell 输出到缓冲区 */
+    private void appendTerminalRaw(String text) {
+        synchronized (terminalBuffer) {
+            terminalBuffer.append(stripAnsi(text));
+            if (terminalFlushTimer != null) {
+                terminalFlushTimer.restart();
             }
-        });
+        }
     }
 
-    /** 向终端面板追加原始文本（不额外加换行，用于实时输出） */
-    private void appendTerminalRaw(String text) {
+    /** 将缓冲区内容刷新到输出面板 */
+    private void flushTerminalBuffer() {
+        String batch;
+        synchronized (terminalBuffer) {
+            if (terminalBuffer.length() == 0) return;
+            batch = terminalBuffer.toString();
+            terminalBuffer.setLength(0);
+        }
         SwingUtilities.invokeLater(() -> {
             try {
-                StyleContext sc = new StyleContext();
-                Style style = sc.addStyle("term", null);
-                StyleConstants.setForeground(style, new Color(0xD4, 0xD4, 0xD4));
-                StyleConstants.setFontSize(style, 12);
-                StyleConstants.setFontFamily(style, "Monospaced");
-
-                terminalDoc.insertString(terminalDoc.getLength(), text, style);
-                terminalPane.setCaretPosition(terminalDoc.getLength());
-            } catch (BadLocationException ignored) {
-            }
+                // 限制最大行数，防止内存溢出
+                int maxLines = 5000;
+                String full = outputDoc.getText(0, outputDoc.getLength());
+                int lineCount = 0;
+                for (int i = 0; i < full.length(); i++) {
+                    if (full.charAt(i) == '\n') lineCount++;
+                }
+                if (lineCount > maxLines) {
+                    // 截断前半部分
+                    int cutPos = 0;
+                    int toCut = lineCount - maxLines;
+                    for (int i = 0, n = 0; i < full.length() && n < toCut; i++) {
+                        if (full.charAt(i) == '\n') n++;
+                        cutPos = i + 1;
+                    }
+                    outputDoc.remove(0, cutPos);
+                }
+                outputDoc.insertString(outputDoc.getLength(), batch, null);
+                outputPane.setCaretPosition(outputDoc.getLength());
+            } catch (BadLocationException ignored) {}
         });
     }
 
     /** 上下键浏览命令历史 */
     private void navigateHistory(int direction) {
         if (cmdHistory.isEmpty()) return;
-
         int newIndex = cmdHistoryIndex;
-
         if (direction < 0) {
-            if (newIndex == -1) {
-                newIndex = cmdHistory.size() - 1;
-            } else if (newIndex > 0) {
-                newIndex--;
-            }
+            // ↑：初次按跳到最新，之后向上滚动
+            if (newIndex == -1) newIndex = cmdHistory.size() - 1;
+            else if (newIndex > 0) newIndex--;
         } else {
-            if (newIndex == -1) {
-                return;
-            } else if (newIndex < cmdHistory.size() - 1) {
-                newIndex++;
-            } else {
-                newIndex = -1;
-            }
+            // ↓：向下滚动，-1 表示回到空
+            if (newIndex == -1) return;
+            else if (newIndex < cmdHistory.size() - 1) newIndex++;
+            else newIndex = -1;
         }
-
         cmdHistoryIndex = newIndex;
-        String text = newIndex == -1 ? "" : cmdHistory.get(newIndex);
-        SwingUtilities.invokeLater(() -> terminalInput.setText(text));
+        shellInputField.setText(newIndex == -1 ? "" : cmdHistory.get(newIndex));
     }
 
     /** 在列表中通过路径选中对应项 */
