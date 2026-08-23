@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.2980.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+# 全部配置仅从 .env 读取，不再设置硬编码默认值
+SMTP_SERVER = os.getenv("SMTP_SERVER", "")
+SMTP_PORT = os.getenv("SMTP_PORT", "")
 EMAIL_SENDER = os.getenv("EMAIL_SENDER", "")
 EMAIL_AUTH_CODE = os.getenv("EMAIL_AUTH_CODE", "")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER", "")
@@ -26,7 +27,7 @@ def send_version_notification(name: str, old_version: str, new_version: str, url
     cc_list = parse_emails(EMAIL_CC)
     all_recipients = receivers + cc_list
 
-    if not all([EMAIL_SENDER, EMAIL_AUTH_CODE, receivers]):
+    if not all([SMTP_SERVER, SMTP_PORT, EMAIL_SENDER, EMAIL_AUTH_CODE, receivers]):
         print("[邮件] 配置不完整，跳过发送")
         return False
 
@@ -66,7 +67,7 @@ def send_version_notification(name: str, old_version: str, new_version: str, url
     msg.attach(MIMEText(body, "html", "utf-8"))
 
     try:
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        server = smtplib.SMTP_SSL(SMTP_SERVER, int(SMTP_PORT))
         server.login(EMAIL_SENDER, EMAIL_AUTH_CODE)
         server.sendmail(EMAIL_SENDER, all_recipients, msg.as_string())
         server.quit()

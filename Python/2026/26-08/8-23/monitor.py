@@ -145,11 +145,38 @@ def parse_gradle_releases(html: str, url: str) -> Optional[VersionInfo]:
 
 
 def parse_github_releases(html: str, url: str) -> Optional[VersionInfo]:
-    """解析 GitHub releases 页面，取最新发布版本。
+    """解析 GitHub releases，取最新发布版本（含 pre-release）。
 
-    页面按发布时间倒序排列，最新发布（包含 pre-release）在最上方；
-    因此直接取第一个 ``/releases/tag/<tag>`` 链接即可，避免对非语义化 tag 排序。
+    GitHub 的 ``/releases`` 页面会把“Latest”（最新正式版）置顶，而更新的
+    pre-release 排在它之后，直接按页面顺序取第一个会漏掉 pre-release。
+    因此优先使用官方 REST API：返回所有 release，按发布时间倒序取最新。
+    仅在 API 不可用时回退到原 HTML 解析。
     """
+    m = re.search(r"github\.com/([^/]+)/([^/]+)", url)
+    if m:
+        owner, repo = m.group(1), m.group(2)
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/releases"
+        try:
+            resp = requests.get(
+                api_url,
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/vnd.github+json"},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                releases = resp.json()
+                if isinstance(releases, list) and releases:
+                    def released_at(r):
+                        return r.get("published_at") or r.get("created_at") or ""
+                    releases.sort(key=released_at, reverse=True)
+                    latest = releases[0]
+                    return VersionInfo(
+                        version=latest.get("tag_name") or latest.get("name") or "",
+                        url=latest.get("html_url") or url,
+                    )
+        except Exception as e:
+            print(f"[GitHub API] 请求失败: {e}")
+
+    # 兜底：沿用 HTML 解析（按页面顺序取第一个 tag）
     soup = BeautifulSoup(html, "html.parser")
     for link in soup.find_all("a", href=re.compile(r"/releases/tag/[^/\s#?]+")):
         href = link.get("href", "")
