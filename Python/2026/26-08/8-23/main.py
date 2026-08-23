@@ -5,13 +5,9 @@ import atexit
 import signal
 import sys
 import threading
-import json
-import os
 import db
 
 app = Flask(__name__)
-
-STATE_FILE = os.path.join(os.path.dirname(__file__), "state.json")
 
 version_history = []
 current_versions = {}
@@ -21,28 +17,14 @@ state_lock = threading.RLock()
 
 def load_state():
     global current_versions, version_history
-    if os.path.exists(STATE_FILE):
+    with state_lock:
         try:
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                with state_lock:
-                    current_versions = data.get("current_versions", {})
-                    version_history = data.get("version_history", [])
-        except Exception:
-            pass
-
-
-def save_state():
-    try:
-        with state_lock:
-            snapshot = {
-                "current_versions": current_versions,
-                "version_history": version_history[:50],
-            }
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(snapshot, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+            current_versions = db.load_current_versions()
+            version_history = db.load_version_history(50)
+        except Exception as e:
+            print(f"[加载] 读取数据库失败: {e}")
+            current_versions = {}
+            version_history = []
 
 
 def on_new_version(name: str, info: VersionInfo):
@@ -57,14 +39,19 @@ def on_new_version(name: str, info: VersionInfo):
             "time": info.detected_at,
         }
         version_history.insert(0, entry)
+        version_history[:] = version_history[:50]
         current_versions[name] = entry
+        try:
+            db.save_current_version(name, info.version, info.url, info.detected_at)
+            db.add_version_history(name, info.version, info.url, info.detected_at)
+        except Exception as e:
+            print(f"[{name}] 写入数据库失败: {e}")
 
     if old_version:
         print(f"通知: {name} 更新到 {info.version}")
         send_version_notification(name, old_version, info.version, info.url)
     else:
         print(f"[{name}] 首次记录版本: {info.version}")
-    save_state()
 
 
 def is_valid_url(url) -> bool:
@@ -90,8 +77,8 @@ def build_monitor_from_row(row):
 
 def init_monitor():
     global monitor
-    load_state()
     db.init_db()
+    load_state()
     all_monitors = []
     for row in db.list_monitors():
         pm = build_monitor_from_row(row)
@@ -99,14 +86,15 @@ def init_monitor():
             all_monitors.append(pm)
     monitor = VersionMonitorApp(interval=60, on_new_version=on_new_version, monitors=all_monitors)
 
-    # 清理 state.json 中已不在监控列表里的孤儿数据（历史与当前版本保持同步）
-    active_names = {m.name for m in monitor.monitors}
+    # 清理数据库中已不在监控列表里的孤儿数据（历史与当前版本保持同步）
+    active_names = [m.name for m in monitor.monitors]
     with state_lock:
         for name in list(current_versions.keys()):
             if name not in active_names:
                 del current_versions[name]
         version_history[:] = [e for e in version_history if e.get("name") in active_names]
-    save_state()
+    db.prune_version_state(active_names)
+    db.prune_version_history(active_names)
 
     for m in monitor.monitors:
         if m.name in current_versions:

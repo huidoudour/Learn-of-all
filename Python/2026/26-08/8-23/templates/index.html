@@ -93,16 +93,6 @@
             transform: translateY(-2px);
         }
 
-        .card.new-version {
-            border-left-color: #e74c3c;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(231,76,60,0.2); }
-            50% { box-shadow: 0 4px 16px rgba(231,76,60,0.4); }
-        }
-
         .card h3 {
             font-size: 16px;
             color: #7f8c8d;
@@ -204,34 +194,6 @@
             opacity: 0.5;
         }
 
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #e74c3c;
-            color: white;
-            padding: 16px 24px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(231,76,60,0.4);
-            transform: translateX(400px);
-            transition: transform 0.3s;
-            z-index: 1000;
-            max-width: 350px;
-        }
-
-        .notification.show {
-            transform: translateX(0);
-        }
-
-        .notification h4 {
-            margin-bottom: 4px;
-        }
-
-        .notification p {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
         .loading {
             display: inline-block;
             width: 20px;
@@ -278,11 +240,6 @@
                 </li>
             </ul>
         </div>
-    </div>
-
-    <div class="notification" id="notification">
-        <h4 id="notifTitle">新版本!</h4>
-        <p id="notifContent"></p>
     </div>
 
     <script>
@@ -359,17 +316,6 @@
                     <span class="version-tag">${item.version}</span>
                 </li>
             `).join('');
-        }
-
-        function showNotification(title, content) {
-            const notif = document.getElementById('notification');
-            document.getElementById('notifTitle').textContent = title;
-            document.getElementById('notifContent').textContent = content;
-            notif.classList.add('show');
-
-            setTimeout(() => {
-                notif.classList.remove('show');
-            }, 5000);
         }
 
         document.getElementById('checkNow').addEventListener('click', async () => {

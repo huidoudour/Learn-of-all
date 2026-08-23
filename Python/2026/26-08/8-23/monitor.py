@@ -145,39 +145,46 @@ def parse_gradle_releases(html: str, url: str) -> Optional[VersionInfo]:
 
 
 def parse_github_releases(html: str, url: str) -> Optional[VersionInfo]:
-    """解析 GitHub releases，取最新发布版本（含 pre-release）。
+    """解析 GitHub releases 页面，取最新发布版本（含 pre-release）。
 
-    GitHub 的 ``/releases`` 页面会把“Latest”（最新正式版）置顶，而更新的
-    pre-release 排在它之后，直接按页面顺序取第一个会漏掉 pre-release。
-    因此优先使用官方 REST API：返回所有 release，按发布时间倒序取最新。
-    仅在 API 不可用时回退到原 HTML 解析。
+    GitHub 的 ``/releases`` 页面把“Latest”（最新正式版）盒子放在最前，
+    而可能更新的 pre-release 排在它后面，直接取第一个 tag 会漏掉它们。
+    这里遍历所有 release 条目，按各自发布时间（relative-time）倒序排序，
+    取最新的一条（因此能命中 pre-release）。只解析 HTML，不依赖会限流的 API。
     """
-    m = re.search(r"github\.com/([^/]+)/([^/]+)", url)
-    if m:
-        owner, repo = m.group(1), m.group(2)
-        api_url = f"https://api.github.com/repos/{owner}/{repo}/releases"
-        try:
-            resp = requests.get(
-                api_url,
-                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/vnd.github+json"},
-                timeout=30,
-            )
-            if resp.status_code == 200:
-                releases = resp.json()
-                if isinstance(releases, list) and releases:
-                    def released_at(r):
-                        return r.get("published_at") or r.get("created_at") or ""
-                    releases.sort(key=released_at, reverse=True)
-                    latest = releases[0]
-                    return VersionInfo(
-                        version=latest.get("tag_name") or latest.get("name") or "",
-                        url=latest.get("html_url") or url,
-                    )
-        except Exception as e:
-            print(f"[GitHub API] 请求失败: {e}")
 
-    # 兜底：沿用 HTML 解析（按页面顺序取第一个 tag）
+    def release_key(item):
+        # 让有发布时间(True)的排在没有时间(False)的前面，再按时间倒序
+        dt = item[0]
+        return (dt != "", dt)
+
     soup = BeautifulSoup(html, "html.parser")
+    entries = []  # (datetime, tag)
+    seen = set()
+    for box in soup.select("div.Box"):
+        link = box.select_one("a[href*='/releases/tag/']")
+        if not link:
+            continue
+        rt = box.select_one("relative-time")
+        if not rt:
+            continue
+        dt = rt.get("datetime", "")
+        href = link.get("href", "")
+        m = re.search(r"/releases/tag/([^/\s#?]+)", href)
+        if not m:
+            continue
+        tag = m.group(1)
+        if tag in seen:
+            continue
+        seen.add(tag)
+        entries.append((dt, tag))
+
+    if entries:
+        entries.sort(key=release_key, reverse=True)
+        tag = entries[0][1]
+        return VersionInfo(version=tag, url=url.rstrip("/") + "/tag/" + tag)
+
+    # 兜底：找不到发布时间时，按页面顺序取第一个 tag
     for link in soup.find_all("a", href=re.compile(r"/releases/tag/[^/\s#?]+")):
         href = link.get("href", "")
         m = re.search(r"/releases/tag/([^/\s#?]+)", href)
