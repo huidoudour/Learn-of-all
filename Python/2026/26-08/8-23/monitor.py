@@ -140,49 +140,136 @@ def parse_gradle_releases(html: str, url: str) -> Optional[VersionInfo]:
     return VersionInfo(version=latest[0], url=url + latest[1])
 
 
+def parse_github_releases(html: str, url: str) -> Optional[VersionInfo]:
+    """解析 GitHub releases 页面，取最新发布版本。
+
+    页面按发布时间倒序排列，最新发布（包含 pre-release）在最上方；
+    因此直接取第一个 ``/releases/tag/<tag>`` 链接即可，避免对非语义化 tag 排序。
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for link in soup.find_all("a", href=re.compile(r"/releases/tag/[^/\s#?]+")):
+        href = link.get("href", "")
+        m = re.search(r"/releases/tag/([^/\s#?]+)", href)
+        if m:
+            tag = m.group(1)
+            return VersionInfo(version=tag, url=url.rstrip("/") + "/tag/" + tag)
+    return None
+
+
+def semantic_version_key(ver: str):
+    """把版本号转成可比较的元组，如 '1.2.3' 和 '1.2.3-rc1'。"""
+    ver = ver.strip().lstrip("vV").strip()
+    m = re.match(r"^([0-9]+(?:\.[0-9]+)*)(.*)$", ver)
+    if not m:
+        return ((0, 0),)
+    core, rest = m.group(1), m.group(2)
+    core_parts = [int(x) for x in core.split(".")]
+    while len(core_parts) < 3:
+        core_parts.append(0)
+    rest = rest.lstrip("-.")
+    is_pre = 0
+    pre_key = []
+    if rest:
+        rest = rest.split("+")[0]
+        if rest:
+            is_pre = 1
+            for t in re.split(r"[-._]", rest):
+                if t.isdigit():
+                    pre_key.append((0, int(t)))
+                else:
+                    pre_key.append((1, t))
+    return (tuple(core_parts), is_pre) + tuple(pre_key)
+
+
+def parse_generic_version(html: str, url: str) -> Optional[VersionInfo]:
+    """在页面中查找形如 1.2.3 / v1.2.3 / 1.2.3-rc1 的版本号，取语义化最高的一个。
+
+    属于启发式解析，可能误抓页面中的其他数字，适合作为通用兜底。
+    """
+    pattern = re.compile(r"(?i)(?<![A-Za-z0-9])v?(\d+\.\d+(?:\.\d+)?(?:[-._][0-9A-Za-z]+)*)")
+    candidates = set()
+    for m in pattern.finditer(html):
+        candidates.add(m.group(1))
+    if not candidates:
+        return None
+    latest = max(candidates, key=semantic_version_key)
+    return VersionInfo(version=latest, url=url)
+
+
+def parse_maven_metadata(html: str, url: str) -> Optional[VersionInfo]:
+    """解析 Maven 的 maven-metadata.xml，取 latest / release / 最后一个 version。"""
+    soup = BeautifulSoup(html, "xml")
+    latest = soup.find("latest")
+    if latest and latest.text:
+        return VersionInfo(version=latest.text, url=url)
+    release = soup.find("release")
+    if release and release.text:
+        return VersionInfo(version=release.text, url=url)
+    versions = soup.find_all("version")
+    if versions:
+        return VersionInfo(version=versions[-1].text, url=url)
+    return None
+
+
+# 预置的解析方式，供前端管理界面选择
+PARSE_FUNCTIONS = {
+    "generic": parse_generic_version,
+    "github": parse_github_releases,
+    "maven": parse_maven_metadata,
+    "gradle-snapshots": parse_gradle_snapshots,
+    "gradle-releases": parse_gradle_releases,
+}
+
+
 class VersionMonitorApp:
-    def __init__(self, interval: int = 300, on_new_version: Optional[Callable] = None):
+    def __init__(
+        self,
+        interval: int = 300,
+        on_new_version: Optional[Callable] = None,
+        monitors: Optional[list] = None,
+    ):
         self.interval = interval
         self.on_new_version = on_new_version
-        self.monitors = [
-            PageMonitor(
-                "https://services.gradle.org/distributions-snapshots/",
-                "Gradle Snapshots",
-                parse_gradle_snapshots,
-            ),
-            PageMonitor(
-                "https://mvnrepository.com/artifact/androidx.compose.ui/ui-tooling-preview/versions",
-                "Compose UI Tooling Preview",
-                parse_mvnrepository,
-                fetch_url="https://dl.google.com/android/maven2/androidx/compose/ui/ui-tooling-preview/maven-metadata.xml",
-            ),
-            PageMonitor(
-                "https://gradle.org/releases/",
-                "Gradle Releases",
-                parse_gradle_releases,
-            ),
-        ]
+        self._monitors_lock = threading.Lock()
+        # 监控项由前端 + SQLite 统一管理，不再在此硬编码
+        self.monitors = list(monitors) if monitors else []
         self._running = False
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+
+    def add_monitor(self, monitor: PageMonitor):
+        with self._monitors_lock:
+            if not any(m.name == monitor.name for m in self.monitors):
+                self.monitors.append(monitor)
+
+    def remove_monitor(self, name: str) -> bool:
+        with self._monitors_lock:
+            original = len(self.monitors)
+            self.monitors[:] = [m for m in self.monitors if m.name != name]
+            return len(self.monitors) != original
 
     def start(self):
         if self._running:
             return
         self._running = True
+        self._stop_event.clear()
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
         print("监控已启动")
 
     def stop(self):
         self._running = False
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
         print("监控已停止")
 
     def _monitor_loop(self):
-        while self._running:
-            for monitor in self.monitors:
-                if not self._running:
+        while not self._stop_event.is_set():
+            with self._monitors_lock:
+                snapshot = list(self.monitors)
+            for monitor in snapshot:
+                if self._stop_event.is_set():
                     break
                 current = monitor.check()
                 if current:
@@ -196,4 +283,4 @@ class VersionMonitorApp:
                             self.on_new_version(monitor.name, current)
                     monitor.last_version = current
 
-            time.sleep(self.interval)
+            self._stop_event.wait(self.interval)

@@ -257,6 +257,7 @@
         <div class="controls">
             <button id="checkNow">立即检查</button>
             <button id="refreshData">刷新数据</button>
+            <button id="gotoAdmin">管理监控</button>
         </div>
 
         <div class="status-cards" id="statusCards">
@@ -391,6 +392,9 @@
         });
 
         document.getElementById('refreshData').addEventListener('click', fetchData);
+        document.getElementById('gotoAdmin').addEventListener('click', () => {
+            window.location.href = '/admin';
+        });
 
         fetchData();
         setInterval(fetchData, 10000);

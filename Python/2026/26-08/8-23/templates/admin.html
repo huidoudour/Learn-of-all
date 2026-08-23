@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>版本监控 - 管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        header {
+            background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%);
+            color: white;
+            padding: 24px 30px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 24px; }
+        header .link a { color: white; text-decoration: none; font-weight: 500; opacity: 0.9; }
+        header .link a:hover { opacity: 1; text-decoration: underline; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 24px;
+        }
+        .card h2 { font-size: 18px; margin-bottom: 16px; color: #2c3e50; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-field { display: flex; flex-direction: column; }
+        .form-field.full { grid-column: 1 / -1; }
+        label { font-size: 13px; color: #7f8c8d; margin-bottom: 6px; }
+        input, select {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.2s;
+        }
+        input:focus, select:focus { border-color: #2193b0; }
+        .hint { font-size: 12px; color: #95a5a6; margin-top: 4px; }
+        .actions { display: flex; gap: 12px; margin-top: 16px; }
+        button {
+            background: #2193b0;
+            color: white;
+            border: none;
+            padding: 11px 22px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        button:hover { background: #1a7a92; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(33,147,176,0.3); }
+        button.secondary { background: #7f8c8d; }
+        button.secondary:hover { background: #6c7a7c; }
+        button.danger { background: #e74c3c; }
+        button.danger:hover { background: #c0392b; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .status { margin-top: 12px; font-size: 14px; padding: 10px 14px; border-radius: 8px; display: none; }
+        .status.ok { display: block; background: #e8f8f0; color: #27ae60; }
+        .status.err { display: block; background: #fdecea; color: #e74c3c; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #ecf0f1; font-size: 14px; }
+        th { color: #7f8c8d; font-weight: 500; }
+        td .url { color: #2193b0; text-decoration: none; }
+        td .url:hover { text-decoration: underline; }
+        .tag { display: inline-block; background: #e8f4f8; color: #2193b0; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+        .muted { color: #95a5a6; font-size: 12px; }
+        .empty { text-align: center; color: #95a5a6; padding: 30px; }
+        .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s linear infinite; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>版本监控管理</h1>
+            <div class="link"><a href="/">← 返回监控面板</a></div>
+        </header>
+
+        <div class="card">
+            <h2>添加监控项</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="name">名称</label>
+                    <input type="text" id="name" placeholder="例如: 我的应用">
+                </div>
+                <div class="form-field">
+                    <label for="parseType">解析方式</label>
+                    <select id="parseType">
+                        <option value="generic">通用版本号识别</option>
+                        <option value="github">GitHub Releases</option>
+                        <option value="maven">Maven metadata</option>
+                        <option value="gradle-snapshots">Gradle 快照</option>
+                        <option value="gradle-releases">Gradle 正式版</option>
+                    </select>
+                </div>
+                <div class="form-field full">
+                    <label for="url">监控链接</label>
+                    <input type="text" id="url" placeholder="https://...">
+                </div>
+                <div class="form-field full">
+                    <label for="fetchUrl">备用地址（可选，如 Maven 的 maven-metadata.xml 地址）</label>
+                    <input type="text" id="fetchUrl" placeholder="留空则使用监控链接">
+                    <div class="hint">对于 Maven 解析方式，此地址用于获取版本信息。</div>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="btnTest">测试解析</button>
+                <button id="btnAdd">添加监控</button>
+            </div>
+            <div class="status" id="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>监控项列表</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>链接</th>
+                        <th>解析方式</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="monitorList"></tbody>
+            </table>
+            <div class="empty" id="monitorEmpty">暂无监控项，请在上方表单中添加</div>
+        </div>
+    </div>
+
+    <script>
+        let parseTypeLabels = {
+            'generic': '通用版本号',
+            'github': 'GitHub Releases',
+            'maven': 'Maven metadata',
+            'gradle-snapshots': 'Gradle 快照',
+            'gradle-releases': 'Gradle 正式版',
+        };
+
+        function showStatus(msg, ok) {
+            const el = document.getElementById('status');
+            el.className = 'status ' + (ok ? 'ok' : 'err');
+            el.textContent = msg;
+            setTimeout(() => { el.className = 'status'; }, 5000);
+        }
+
+        async function loadMonitors() {
+            const res = await fetch('/api/custom-monitors');
+            const rows = await res.json();
+            const tbody = document.getElementById('monitorList');
+            const empty = document.getElementById('monitorEmpty');
+
+            if (rows.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+            tbody.innerHTML = rows.map(m => `
+                <tr>
+                    <td>${m.name}</td>
+                    <td><a class="url" href="${m.url}" target="_blank">${m.url}</a></td>
+                    <td><span class="tag">${parseTypeLabels[m.parse_type] || m.parse_type}</span></td>
+                    <td class="muted">${m.created_at || ''}</td>
+                    <td><button class="danger" data-id="${m.id}">删除</button></td>
+                </tr>
+            `).join('');
+
+            tbody.querySelectorAll('button.danger').forEach(btn => {
+                btn.addEventListener('click', () => removeMonitor(btn.dataset.id));
+            });
+        }
+
+        async function removeMonitor(id) {
+            if (!confirm('确定删除该监控项？')) return;
+            const res = await fetch('/api/custom-monitors/' + id, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.ok) {
+                await loadMonitors();
+            }
+        }
+
+        async function testParse() {
+            const url = document.getElementById('url').value.trim();
+            const parseType = document.getElementById('parseType').value;
+            const fetchUrl = document.getElementById('fetchUrl').value.trim();
+            const btn = document.getElementById('btnTest');
+
+            btn.innerHTML = '<span class="loading"></span> 测试中...';
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/test-parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, parse_type: parseType, fetch_url: fetchUrl }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showStatus('解析成功: ' + data.version, true);
+                } else {
+                    showStatus(data.error || '解析失败', false);
+                }
+            } catch (e) {
+                showStatus('请求失败: ' + e.message, false);
+            } finally {
+                btn.innerHTML = '测试解析';
+                btn.disabled = false;
+            }
+        }
+
+        async function addMonitor() {
+            const name = document.getElementById('name').value.trim();
+            const url = document.getElementById('url').value.trim();
+            const parseType = document.getElementById('parseType').value;
+            const fetchUrl = document.getElementById('fetchUrl').value.trim();
+            const btn = document.getElementById('btnAdd');
+
+            btn.innerHTML = '<span class="loading"></span> 添加中...';
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/custom-monitors', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, url, parse_type: parseType, fetch_url: fetchUrl }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showStatus('添加成功', true);
+                    document.getElementById('name').value = '';
+                    document.getElementById('url').value = '';
+                    document.getElementById('fetchUrl').value = '';
+                    await loadMonitors();
+                } else {
+                    showStatus(data.error || '添加失败', false);
+                }
+            } catch (e) {
+                showStatus('请求失败: ' + e.message, false);
+            } finally {
+                btn.innerHTML = '添加监控';
+                btn.disabled = false;
+            }
+        }
+
+        document.getElementById('btnTest').addEventListener('click', testParse);
+        document.getElementById('btnAdd').addEventListener('click', addMonitor);
+
+        loadMonitors();
+    </script>
+</body>
+</html>

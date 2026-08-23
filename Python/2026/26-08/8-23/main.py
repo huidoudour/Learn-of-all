@@ -1,9 +1,13 @@
-from flask import Flask, render_template, jsonify
-from monitor import VersionMonitorApp, VersionInfo
+from flask import Flask, render_template, jsonify, request
+from monitor import VersionMonitorApp, VersionInfo, PageMonitor, PARSE_FUNCTIONS
 from email_notifier import send_version_notification
+import atexit
+import signal
+import sys
 import threading
 import json
 import os
+import db
 
 app = Flask(__name__)
 
@@ -63,10 +67,38 @@ def on_new_version(name: str, info: VersionInfo):
     save_state()
 
 
+def build_monitor_from_row(row):
+    parse_func = PARSE_FUNCTIONS.get(row.get("parse_type"))
+    if not parse_func:
+        return None
+    return PageMonitor(
+        row["url"],
+        row["name"],
+        parse_func,
+        fetch_url=row.get("fetch_url") or None,
+    )
+
+
 def init_monitor():
     global monitor
     load_state()
-    monitor = VersionMonitorApp(interval=60, on_new_version=on_new_version)
+    db.init_db()
+    all_monitors = []
+    for row in db.list_monitors():
+        pm = build_monitor_from_row(row)
+        if pm:
+            all_monitors.append(pm)
+    monitor = VersionMonitorApp(interval=60, on_new_version=on_new_version, monitors=all_monitors)
+
+    # 清理 state.json 中已不在监控列表里的孤儿数据（历史与当前版本保持同步）
+    active_names = {m.name for m in monitor.monitors}
+    with state_lock:
+        for name in list(current_versions.keys()):
+            if name not in active_names:
+                del current_versions[name]
+        version_history[:] = [e for e in version_history if e.get("name") in active_names]
+    save_state()
+
     for m in monitor.monitors:
         if m.name in current_versions:
             saved = current_versions[m.name]
@@ -82,6 +114,68 @@ def init_monitor():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/admin")
+def admin():
+    return render_template("admin.html")
+
+
+@app.route("/api/custom-monitors", methods=["GET"])
+def get_custom_monitors():
+    return jsonify(db.list_monitors())
+
+
+@app.route("/api/custom-monitors", methods=["POST"])
+def add_custom_monitor():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    url = (data.get("url") or "").strip()
+    parse_type = (data.get("parse_type") or "generic").strip()
+    fetch_url = (data.get("fetch_url") or "").strip() or None
+
+    if not name or not url:
+        return jsonify({"ok": False, "error": "名称和链接不能为空"}), 400
+    if parse_type not in PARSE_FUNCTIONS:
+        return jsonify({"ok": False, "error": f"不支持的解析方式: {parse_type}"}), 400
+
+    try:
+        mid = db.add_monitor(name, url, parse_type, fetch_url)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    if monitor:
+        pm = PageMonitor(url, name, PARSE_FUNCTIONS[parse_type], fetch_url=fetch_url)
+        monitor.add_monitor(pm)
+    return jsonify({"ok": True, "id": mid})
+
+
+@app.route("/api/custom-monitors/<int:mid>", methods=["DELETE"])
+def remove_custom_monitor(mid):
+    row = db.get_monitor(mid)
+    db.remove_monitor(mid)
+    if monitor and row:
+        monitor.remove_monitor(row["name"])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/test-parse", methods=["POST"])
+def test_parse():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    parse_type = (data.get("parse_type") or "generic").strip()
+    fetch_url = (data.get("fetch_url") or "").strip() or None
+
+    if not url:
+        return jsonify({"ok": False, "error": "链接不能为空"}), 400
+    if parse_type not in PARSE_FUNCTIONS:
+        return jsonify({"ok": False, "error": f"不支持的解析方式: {parse_type}"}), 400
+
+    pm = PageMonitor(url, "测试", PARSE_FUNCTIONS[parse_type], fetch_url=fetch_url)
+    result = pm.check()
+    if result:
+        return jsonify({"ok": True, "version": result.version, "url": result.url})
+    return jsonify({"ok": False, "error": "未能解析出版本，请检查链接或解析方式"})
 
 
 @app.route("/api/versions")
@@ -100,7 +194,9 @@ def check_now():
     if not monitor:
         return jsonify({"status": "monitor not running"})
 
-    for m in monitor.monitors:
+    with monitor._monitors_lock:
+        snapshot = list(monitor.monitors)
+    for m in snapshot:
         result = m.check()
         if result:
             # 统一走 on_new_version：首次仅记录版本，有旧版本才通知
@@ -110,6 +206,35 @@ def check_now():
     return jsonify({"status": "checked"})
 
 
+_shut_down = False
+
+
+def shutdown():
+    """安全退出：停止后台监控线程，幂等。"""
+    global _shut_down
+    if _shut_down:
+        return
+    _shut_down = True
+    print("\n正在关闭...")
+    if monitor:
+        monitor.stop()
+
+
 if __name__ == "__main__":
     init_monitor()
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    atexit.register(shutdown)
+
+    def _signal_handler(signum, frame):
+        print(f"\n收到信号 {signum}，程序即将退出...")
+        shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
+    try:
+        app.run(host="127.0.0.1", port=5000, debug=False)
+    except KeyboardInterrupt:
+        shutdown()
+    finally:
+        shutdown()
