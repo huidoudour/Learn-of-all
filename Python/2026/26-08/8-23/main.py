@@ -67,12 +67,21 @@ def on_new_version(name: str, info: VersionInfo):
     save_state()
 
 
+def is_valid_url(url) -> bool:
+    return isinstance(url, str) and url.strip().lower().startswith(("http://", "https://"))
+
+
 def build_monitor_from_row(row):
+    url = row.get("url") or ""
+    if not is_valid_url(url):
+        print(f"[{row.get('name')}] 跳过：链接格式无效 {url!r}")
+        return None
     parse_func = PARSE_FUNCTIONS.get(row.get("parse_type"))
     if not parse_func:
+        print(f"[{row.get('name')}] 跳过：未知解析方式 {row.get('parse_type')}")
         return None
     return PageMonitor(
-        row["url"],
+        url,
         row["name"],
         parse_func,
         fetch_url=row.get("fetch_url") or None,
@@ -136,6 +145,8 @@ def add_custom_monitor():
 
     if not name or not url:
         return jsonify({"ok": False, "error": "名称和链接不能为空"}), 400
+    if not is_valid_url(url):
+        return jsonify({"ok": False, "error": "链接格式不正确，需以 http:// 或 https:// 开头"}), 400
     if parse_type not in PARSE_FUNCTIONS:
         return jsonify({"ok": False, "error": f"不支持的解析方式: {parse_type}"}), 400
 
@@ -168,6 +179,8 @@ def test_parse():
 
     if not url:
         return jsonify({"ok": False, "error": "链接不能为空"}), 400
+    if not is_valid_url(url):
+        return jsonify({"ok": False, "error": "链接格式不正确，需以 http:// 或 https:// 开头"}), 400
     if parse_type not in PARSE_FUNCTIONS:
         return jsonify({"ok": False, "error": f"不支持的解析方式: {parse_type}"}), 400
 

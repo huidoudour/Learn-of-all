@@ -1,12 +1,16 @@
 import re
 import time
 import threading
+import warnings
 from datetime import datetime
 from typing import Callable, Optional
 from dataclasses import dataclass, field
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+
+# 部分监控页可能是 XML（如 maven-metadata），避免误导性的“用 HTML 解析 XML”警告刷屏
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 
 @dataclass
