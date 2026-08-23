@@ -315,9 +315,11 @@
                 return;
             }
 
+            const isFirstLoad = Object.keys(lastVersions).length === 0;
+
             container.innerHTML = names.map(name => {
                 const item = current[name];
-                const isNew = lastVersions[name] && lastVersions[name] !== item.version;
+                const isNew = !isFirstLoad && lastVersions[name] && lastVersions[name] !== item.version;
                 const cardClass = isNew ? 'card new-version' : 'card';
 
                 return `
