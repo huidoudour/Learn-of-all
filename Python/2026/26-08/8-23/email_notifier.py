@@ -1,0 +1,77 @@
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.2980.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+EMAIL_SENDER = os.getenv("EMAIL_SENDER", "")
+EMAIL_AUTH_CODE = os.getenv("EMAIL_AUTH_CODE", "")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER", "")
+EMAIL_CC = os.getenv("EMAIL_CC", "")
+
+
+def parse_emails(email_str: str) -> list:
+    if not email_str:
+        return []
+    return [e.strip() for e in email_str.split(",") if e.strip()]
+
+
+def send_version_notification(name: str, old_version: str, new_version: str, url: str):
+    receivers = parse_emails(EMAIL_RECEIVER)
+    cc_list = parse_emails(EMAIL_CC)
+    all_recipients = receivers + cc_list
+
+    if not all([EMAIL_SENDER, EMAIL_AUTH_CODE, receivers]):
+        print("[邮件] 配置不完整，跳过发送")
+        return False
+
+    subject = f"[版本更新] {name}"
+    body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; color: #333;">
+    <h2 style="color: #2193b0;">版本更新通知</h2>
+    <table style="border-collapse: collapse; width: 100%; max-width: 500px;">
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">监控项目</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">{name}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">旧版本</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">{old_version or "首次检测"}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">新版本</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #e74c3c; font-weight: bold;">{new_version}</td>
+        </tr>
+    </table>
+    <p style="margin-top: 20px;">
+        <a href="{url}" style="color: #2193b0; text-decoration: none;">查看来源</a>
+    </p>
+    <p style="color: #999; font-size: 12px; margin-top: 30px;">此邮件由版本监控程序自动发送</p>
+</body>
+</html>
+"""
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = Header(EMAIL_SENDER)
+    msg["To"] = Header(", ".join(receivers))
+    if cc_list:
+        msg["Cc"] = Header(", ".join(cc_list))
+    msg["Subject"] = Header(subject, "utf-8")
+    msg.attach(MIMEText(body, "html", "utf-8"))
+
+    try:
+        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        server.login(EMAIL_SENDER, EMAIL_AUTH_CODE)
+        server.sendmail(EMAIL_SENDER, all_recipients, msg.as_string())
+        server.quit()
+        print(f"[邮件] 已发送: {name} -> {new_version} (收件人: {len(receivers)}, 抄送: {len(cc_list)})")
+        return True
+    except Exception as e:
+        print(f"[邮件] 发送失败: {e}")
+        return False

@@ -1,5 +1,6 @@
 from flask import Flask, render_template, jsonify
 from monitor import VersionMonitorApp, VersionInfo
+from email_notifier import send_version_notification
 from datetime import datetime
 import threading
 
@@ -11,6 +12,7 @@ monitor = None
 
 
 def on_new_version(name: str, info: VersionInfo):
+    old_version = current_versions.get(name, {}).get("version")
     entry = {
         "name": name,
         "version": info.version,
@@ -20,6 +22,7 @@ def on_new_version(name: str, info: VersionInfo):
     version_history.insert(0, entry)
     current_versions[name] = entry
     print(f"通知: {name} 更新到 {info.version}")
+    send_version_notification(name, old_version, info.version, info.url)
 
 
 def init_monitor():
