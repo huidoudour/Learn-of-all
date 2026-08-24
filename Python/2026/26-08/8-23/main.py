@@ -1,5 +1,7 @@
+import os
 from flask import Flask, render_template, jsonify, request
-from monitor import VersionMonitorApp, VersionInfo, PageMonitor, PARSE_FUNCTIONS
+from dotenv import load_dotenv
+from monitor import VersionMonitorApp, VersionInfo, PageMonitor, PARSE_FUNCTIONS, google_maven_metadata_url
 from email_notifier import send_version_notification
 import atexit
 import signal
@@ -7,7 +9,10 @@ import sys
 import threading
 import db
 
+load_dotenv()
+
 app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 version_history = []
 current_versions = {}
@@ -67,11 +72,15 @@ def build_monitor_from_row(row):
     if not parse_func:
         print(f"[{row.get('name')}] 跳过：未知解析方式 {row.get('parse_type')}")
         return None
+    fetch_url = row.get("fetch_url") or None
+    # google-maven 未指定备用地址时，自动改用 Google 官方元数据源，规避 Cloudflare 拦截
+    if row.get("parse_type") == "google-maven" and not fetch_url:
+        fetch_url = google_maven_metadata_url(url)
     return PageMonitor(
         url,
         row["name"],
         parse_func,
-        fetch_url=row.get("fetch_url") or None,
+        fetch_url=fetch_url,
     )
 
 
@@ -84,7 +93,8 @@ def init_monitor():
         pm = build_monitor_from_row(row)
         if pm:
             all_monitors.append(pm)
-    monitor = VersionMonitorApp(interval=60, on_new_version=on_new_version, monitors=all_monitors)
+    monitor_interval = int(os.getenv("MONITOR_INTERVAL", "60"))
+    monitor = VersionMonitorApp(interval=monitor_interval, on_new_version=on_new_version, monitors=all_monitors)
 
     # 清理数据库中已不在监控列表里的孤儿数据（历史与当前版本保持同步）
     active_names = [m.name for m in monitor.monitors]
@@ -137,6 +147,10 @@ def add_custom_monitor():
         return jsonify({"ok": False, "error": "链接格式不正确，需以 http:// 或 https:// 开头"}), 400
     if parse_type not in PARSE_FUNCTIONS:
         return jsonify({"ok": False, "error": f"不支持的解析方式: {parse_type}"}), 400
+
+    # google-maven 未填写备用地址时自动推导官方元数据源，避免 mvnrepository 的 403
+    if parse_type == "google-maven" and not fetch_url:
+        fetch_url = google_maven_metadata_url(url)
 
     try:
         mid = db.add_monitor(name, url, parse_type, fetch_url)

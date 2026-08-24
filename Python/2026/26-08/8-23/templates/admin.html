@@ -103,6 +103,7 @@
                         <option value="generic">通用版本号识别</option>
                         <option value="github">GitHub Releases</option>
                         <option value="maven">Maven metadata</option>
+                        <option value="google-maven">Google Maven 元数据</option>
                         <option value="gradle-snapshots">Gradle 快照</option>
                         <option value="gradle-releases">Gradle 正式版</option>
                     </select>
@@ -114,7 +115,7 @@
                 <div class="form-field full">
                     <label for="fetchUrl">备用地址（可选，如 Maven 的 maven-metadata.xml 地址）</label>
                     <input type="text" id="fetchUrl" placeholder="留空则使用监控链接">
-                    <div class="hint">对于 Maven 解析方式，此地址用于获取版本信息。</div>
+                    <div class="hint">Maven / Google Maven 解析方式：填 maven-metadata.xml 地址，或留空由系统自动推导。</div>
                 </div>
             </div>
             <div class="actions">
@@ -147,6 +148,7 @@
             'generic': '通用版本号',
             'github': 'GitHub Releases',
             'maven': 'Maven metadata',
+            'google-maven': 'Google Maven 元数据',
             'gradle-snapshots': 'Gradle 快照',
             'gradle-releases': 'Gradle 正式版',
         };

@@ -1,7 +1,9 @@
 import re
 import time
+import random
 import threading
 import warnings
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Callable, Optional
 from dataclasses import dataclass, field
@@ -28,18 +30,52 @@ class PageMonitor:
         self.fetch_url = fetch_url or url
         self.last_version: Optional[VersionInfo] = None
 
+    def _request_with_retry(self, url: str, headers: dict, retries: int = 3) -> requests.Response:
+        """带退避重试的 GET 请求，缓解 Cloudflare 等反爬导致的 403/429 间歇性失败。"""
+        last_err: Optional[Exception] = None
+        retry_statuses = (403, 429, 502, 503, 504)
+        for attempt in range(retries):
+            try:
+                response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+                if response.status_code in retry_statuses:
+                    # 403/429/5xx 通常是一时性的服务器/反爬拦截，记录后进入重试
+                    last_err = requests.HTTPError(f"{response.status_code} {response.reason}", response=response)
+                else:
+                    response.raise_for_status()
+                    return response
+            except requests.HTTPError:
+                # 非重试类 HTTP 错误（如 404）不重试，直接抛给上层
+                if last_err is None:
+                    raise
+            except Exception as e:
+                last_err = e
+
+            wait = 2 * (attempt + 1) + random.uniform(0, 1)
+            print(f"[{self.name}] 第 {attempt + 1}/{retries} 次请求失败({last_err})，{wait:.1f}s 后重试")
+            if attempt < retries - 1:
+                time.sleep(wait)
+        raise last_err if last_err else requests.RequestException("请求失败")
+
     def check(self) -> Optional[VersionInfo]:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-User": "?1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Ch-Ua": '\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '\"Windows\"',
+        }
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-            }
-            response = requests.get(self.fetch_url, headers=headers, timeout=30, allow_redirects=True)
-            response.raise_for_status()
+            response = self._request_with_retry(self.fetch_url, headers)
             result = self.parse_func(response.text, self.url)
             if result is None:
                 print(f"[{self.name}] 解析失败: 未找到版本信息")
@@ -90,16 +126,7 @@ def parse_mvnrepository(html: str, url: str) -> Optional[VersionInfo]:
         }
         response = requests.get(metadata_url, headers=headers, timeout=30)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, "xml")
-        latest = soup.find("latest")
-        if latest and latest.text:
-            return VersionInfo(version=latest.text, url=url)
-        release = soup.find("release")
-        if release and release.text:
-            return VersionInfo(version=release.text, url=url)
-        versions = soup.find_all("version")
-        if versions:
-            return VersionInfo(version=versions[-1].text, url=url)
+        return parse_maven_metadata(response.text, url)
     except Exception as e:
         print(f"[Compose UI Tooling Preview] 请求失败: {e}")
 
@@ -235,18 +262,63 @@ def parse_generic_version(html: str, url: str) -> Optional[VersionInfo]:
 
 
 def parse_maven_metadata(html: str, url: str) -> Optional[VersionInfo]:
-    """解析 Maven 的 maven-metadata.xml，取 latest / release / 最后一个 version。"""
-    soup = BeautifulSoup(html, "xml")
-    latest = soup.find("latest")
-    if latest and latest.text:
-        return VersionInfo(version=latest.text, url=url)
-    release = soup.find("release")
-    if release and release.text:
-        return VersionInfo(version=release.text, url=url)
-    versions = soup.find_all("version")
+    """解析 Maven 的 maven-metadata.xml，取 latest / release / 最后一个 version。
+
+    使用标准库 xml.etree.ElementTree 解析，避免依赖未安装的 lxml 解析器。
+    """
+    try:
+        root = ET.fromstring(html)
+    except ET.ParseError as e:
+        print(f"[{url}] XML 解析失败: {e}")
+        return None
+
+    def _text(tag: str) -> Optional[str]:
+        # 使用 .// 递归查找（latest/release 嵌套在 <versioning> 内），等价于 BeautifulSoup 的 find()
+        el = root.find(f".//{tag}")
+        if el is not None and el.text:
+            return el.text.strip()
+        return None
+
+    latest = _text("latest")
+    if latest:
+        return VersionInfo(version=latest, url=url)
+    release = _text("release")
+    if release:
+        return VersionInfo(version=release, url=url)
+    versions = root.findall(".//version")
     if versions:
-        return VersionInfo(version=versions[-1].text, url=url)
+        return VersionInfo(version=versions[-1].text.strip(), url=url)
     return None
+
+
+GOOGLE_MAVEN_ROOT = "https://dl.google.com/android/maven2"
+
+
+def google_maven_metadata_url(url: str) -> Optional[str]:
+    """从 mvnrepository 页面 URL 或已有的 maven-metadata URL 推导 Google Maven 元数据地址。
+
+    mvnrepository.com 受 Cloudflare 反爬保护，直接抓取易返回 403；
+    改用 Google 官方源可稳定获取版本信息。
+    例如:
+      https://mvnrepository.com/artifact/androidx.sqlite/sqlite/versions
+      -> https://dl.google.com/android/maven2/androidx/sqlite/sqlite/maven-metadata.xml
+    """
+    m = re.search(r"mvnrepository\.com/artifact/([^/]+)/([^/#?]+)", url)
+    if m:
+        group, artifact = m.group(1), m.group(2)
+        return f"{GOOGLE_MAVEN_ROOT}/{group.replace('.', '/')}/{artifact}/maven-metadata.xml"
+    # 已经是元数据 XML 或 Google 源地址则原样使用
+    if "maven-metadata.xml" in url or url.startswith(GOOGLE_MAVEN_ROOT):
+        return url
+    return None
+
+
+def parse_google_maven(html: str, url: str) -> Optional[VersionInfo]:
+    """解析 Google Maven(AndroidX) 的 maven-metadata.xml，取最新版本。
+
+    由 build_monitor_from_row 自动将 fetch_url 指向官方元数据地址，
+    这里复用 maven-metadata 的解析逻辑。"""
+    return parse_maven_metadata(html, url)
 
 
 # 预置的解析方式，供前端管理界面选择
@@ -254,6 +326,7 @@ PARSE_FUNCTIONS = {
     "generic": parse_generic_version,
     "github": parse_github_releases,
     "maven": parse_maven_metadata,
+    "google-maven": parse_google_maven,
     "gradle-snapshots": parse_gradle_snapshots,
     "gradle-releases": parse_gradle_releases,
 }

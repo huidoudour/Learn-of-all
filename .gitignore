@@ -1,5 +1,6 @@
 /bak
 /build
 .vscode
+/.venv
 *.log
 **.class

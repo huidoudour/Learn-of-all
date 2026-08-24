@@ -72,52 +72,79 @@
             transform: translateY(0);
         }
 
-        .status-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .card {
+        .status-list {
             background: white;
             border-radius: 12px;
-            padding: 24px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            border-left: 4px solid #2193b0;
-            transition: all 0.3s;
+            margin-bottom: 30px;
+            overflow: hidden;
         }
 
-        .card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-            transform: translateY(-2px);
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            border-left: 4px solid transparent;
+            border-bottom: 1px solid #ecf0f1;
+            transition: background 0.2s;
         }
 
-        .card h3 {
-            font-size: 16px;
-            color: #7f8c8d;
-            margin-bottom: 12px;
-            font-weight: 500;
+        .status-item:last-child {
+            border-bottom: none;
         }
 
-        .card .version {
-            font-size: 20px;
+        .status-item:hover {
+            background: #f8f9fa;
+        }
+
+        .status-item.new-version {
+            background: #fff8e6;
+            border-left: 4px solid #f39c12;
+        }
+
+        .status-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .status-name {
             font-weight: 600;
             color: #2c3e50;
-            margin-bottom: 8px;
+            font-size: 15px;
+            margin-bottom: 4px;
         }
 
-        .card .meta {
-            font-size: 12px;
+        .status-meta {
             color: #95a5a6;
+            font-size: 12px;
         }
 
-        .card a {
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            white-space: nowrap;
+        }
+
+        .status-version {
+            display: inline-block;
+            background: #e8f4f8;
+            color: #2193b0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-link {
             color: #2193b0;
             text-decoration: none;
+            font-size: 13px;
         }
 
-        .card a:hover {
+        .status-link:hover {
             text-decoration: underline;
         }
 
@@ -222,7 +249,7 @@
             <button id="gotoAdmin">管理监控</button>
         </div>
 
-        <div class="status-cards" id="statusCards">
+        <div class="status-list" id="statusCards">
             <div class="empty-state">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -278,15 +305,17 @@
             container.innerHTML = names.map(name => {
                 const item = current[name];
                 const isNew = !isFirstLoad && lastVersions[name] && lastVersions[name] !== item.version;
-                const cardClass = isNew ? 'card new-version' : 'card';
+                const rowClass = isNew ? 'status-item new-version' : 'status-item';
 
                 return `
-                    <div class="${cardClass}">
-                        <h3>${name}</h3>
-                        <div class="version">${item.version}</div>
-                        <div class="meta">
-                            检测时间: ${item.time}<br>
-                            <a href="${item.url}" target="_blank">查看来源</a>
+                    <div class="${rowClass}">
+                        <div class="status-main">
+                            <div class="status-name">${name}</div>
+                            <div class="status-meta">检测时间: ${item.time}</div>
+                        </div>
+                        <div class="status-right">
+                            <span class="status-version">${item.version}</span>
+                            <a class="status-link" href="${item.url}" target="_blank">查看来源</a>
                         </div>
                     </div>
                 `;
