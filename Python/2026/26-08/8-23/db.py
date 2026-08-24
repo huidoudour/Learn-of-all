@@ -75,6 +75,15 @@ def add_monitor(name: str, url: str, parse_type: str, fetch_url: str | None = No
         return cur.lastrowid
 
 
+def update_monitor(mid: int, name: str, url: str, parse_type: str, fetch_url: str | None = None):
+    with closing(_conn()) as conn:
+        conn.execute(
+            "UPDATE custom_monitors SET name=?, url=?, parse_type=?, fetch_url=? WHERE id=?",
+            (name, url, parse_type, fetch_url, mid),
+        )
+        conn.commit()
+
+
 def remove_monitor(mid: int):
     with closing(_conn()) as conn:
         conn.execute("DELETE FROM custom_monitors WHERE id = ?", (mid,))

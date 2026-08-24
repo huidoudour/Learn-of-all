@@ -163,6 +163,41 @@ def add_custom_monitor():
     return jsonify({"ok": True, "id": mid})
 
 
+@app.route("/api/custom-monitors/<int:mid>", methods=["PUT"])
+def update_custom_monitor(mid):
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    url = (data.get("url") or "").strip()
+    parse_type = (data.get("parse_type") or "generic").strip()
+    fetch_url = (data.get("fetch_url") or "").strip() or None
+
+    if not name or not url:
+        return jsonify({"ok": False, "error": "名称和链接不能为空"}), 400
+    if not is_valid_url(url):
+        return jsonify({"ok": False, "error": "链接格式不正确，需以 http:// 或 https:// 开头"}), 400
+    if parse_type not in PARSE_FUNCTIONS:
+        return jsonify({"ok": False, "error": f"不支持的解析方式: {parse_type}"}), 400
+    if parse_type == "google-maven" and not fetch_url:
+        fetch_url = google_maven_metadata_url(url)
+
+    row = db.get_monitor(mid)
+    if not row:
+        return jsonify({"ok": False, "error": "监控项不存在"}), 404
+
+    try:
+        db.update_monitor(mid, name, url, parse_type, fetch_url)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    # 同步运行中的监控：先移除旧项，再按新配置加入
+    if monitor:
+        if row:
+            monitor.remove_monitor(row["name"])
+        pm = PageMonitor(url, name, PARSE_FUNCTIONS[parse_type], fetch_url=fetch_url)
+        monitor.add_monitor(pm)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/custom-monitors/<int:mid>", methods=["DELETE"])
 def remove_custom_monitor(mid):
     row = db.get_monitor(mid)

@@ -44,6 +44,76 @@
             font-size: 14px;
         }
 
+        .layout {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 220px;
+            flex-shrink: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 12px;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            color: #95a5a6;
+            padding: 8px 12px 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            color: #2c3e50;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            user-select: none;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .nav-item:hover {
+            background: #f0f4f8;
+        }
+
+        .nav-item.active {
+            background: #2193b0;
+            color: white;
+        }
+
+        .nav-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* 主内容区 */
+        .content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
         .controls {
             display: flex;
             gap: 10px;
@@ -86,9 +156,7 @@
             justify-content: space-between;
             gap: 16px;
             padding: 18px 24px;
-            border-left: 4px solid transparent;
             border-bottom: 1px solid #ecf0f1;
-            transition: background 0.2s;
         }
 
         .status-item:last-child {
@@ -97,11 +165,6 @@
 
         .status-item:hover {
             background: #f8f9fa;
-        }
-
-        .status-item.new-version {
-            background: #fff8e6;
-            border-left: 4px solid #f39c12;
         }
 
         .status-main {
@@ -234,6 +297,34 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* 管理页 iframe */
+        #adminFrame {
+            width: 100%;
+            height: calc(100vh - 200px);
+            border: none;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        @media (max-width: 768px) {
+            .layout {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                position: static;
+                display: flex;
+                gap: 4px;
+            }
+            .sidebar-title {
+                display: none;
+            }
+            .nav-item {
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -243,34 +334,73 @@
             <p>实时监控平台和页面的最新版本变化</p>
         </header>
 
-        <div class="controls">
-            <button id="checkNow">立即检查</button>
-            <button id="refreshData">刷新数据</button>
-            <button id="gotoAdmin">管理监控</button>
-        </div>
+        <div class="layout">
+            <!-- 侧边栏 -->
+            <aside class="sidebar">
+                <div class="sidebar-title">导航</div>
+                <button class="nav-item active" data-panel="monitors">
+                    <span class="nav-icon">📋</span> 当前监控
+                </button>
+                <button class="nav-item" data-panel="history">
+                    <span class="nav-icon">🕘</span> 版本记录历史
+                </button>
+                <button class="nav-item" data-panel="admin">
+                    <span class="nav-icon">⚙️</span> 监控管理
+                </button>
+            </aside>
 
-        <div class="status-list" id="statusCards">
-            <div class="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <p>等待首次检查完成...</p>
-            </div>
-        </div>
+            <!-- 主内容区 -->
+            <main class="content">
+                <!-- 当前监控 -->
+                <section id="panel-monitors">
+                    <div class="controls">
+                        <button id="checkNow">立即检查</button>
+                        <button id="refreshData">刷新数据</button>
+                    </div>
+                    <div class="status-list" id="statusCards">
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            <p>等待首次检查完成...</p>
+                        </div>
+                    </div>
+                </section>
 
-        <div class="history-section">
-            <h2>更新历史</h2>
-            <ul class="history-list" id="historyList">
-                <li class="empty-state">
-                    <p>暂无更新记录</p>
-                </li>
-            </ul>
+                <!-- 版本记录历史 -->
+                <section id="panel-history" class="hidden">
+                    <div class="history-section">
+                        <h2>更新历史</h2>
+                        <ul class="history-list" id="historyList">
+                            <li class="empty-state">
+                                <p>暂无更新记录</p>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- 监控管理 -->
+                <section id="panel-admin" class="hidden">
+                    <iframe id="adminFrame" src="/admin" title="监控管理"></iframe>
+                </section>
+            </main>
         </div>
     </div>
 
     <script>
-        let lastVersions = {};
+        function switchPanel(panelId) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.panel === panelId);
+            });
+            document.querySelectorAll('.content section').forEach(sec => {
+                sec.classList.toggle('hidden', sec.id !== 'panel-' + panelId);
+            });
+        }
+
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => switchPanel(item.dataset.panel));
+        });
 
         async function fetchData() {
             try {
@@ -300,15 +430,11 @@
                 return;
             }
 
-            const isFirstLoad = Object.keys(lastVersions).length === 0;
-
             container.innerHTML = names.map(name => {
                 const item = current[name];
-                const isNew = !isFirstLoad && lastVersions[name] && lastVersions[name] !== item.version;
-                const rowClass = isNew ? 'status-item new-version' : 'status-item';
 
                 return `
-                    <div class="${rowClass}">
+                    <div class="status-item">
                         <div class="status-main">
                             <div class="status-name">${name}</div>
                             <div class="status-meta">检测时间: ${item.time}</div>
@@ -320,8 +446,6 @@
                     </div>
                 `;
             }).join('');
-
-            lastVersions = {...current};
         }
 
         function renderHistory(history) {
@@ -367,9 +491,6 @@
         });
 
         document.getElementById('refreshData').addEventListener('click', fetchData);
-        document.getElementById('gotoAdmin').addEventListener('click', () => {
-            window.location.href = '/admin';
-        });
 
         fetchData();
         setInterval(fetchData, 10000);
