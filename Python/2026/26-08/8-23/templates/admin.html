@@ -70,6 +70,7 @@
         button.edit { background: #2980b9; }
         button.edit:hover { background: #1f6fa0; }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .hide { display: none; }
         .status { margin-top: 12px; font-size: 14px; padding: 10px 14px; border-radius: 8px; display: none; }
         .status.ok { display: block; background: #e8f8f0; color: #27ae60; }
         .status.err { display: block; background: #fdecea; color: #e74c3c; }
@@ -123,7 +124,7 @@
             <div class="actions">
                 <button id="btnTest">测试解析</button>
                 <button id="btnAdd">添加监控</button>
-                <button id="btnCancel" class="secondary" style="display:none;">取消编辑</button>
+                <button id="btnCancel" class="secondary hide">取消编辑</button>
             </div>
             <div class="status" id="status"></div>
         </div>
@@ -250,7 +251,7 @@
             document.getElementById('parseType').value = m.parse_type;
             document.getElementById('fetchUrl').value = m.fetch_url || '';
             document.getElementById('btnAdd').textContent = '保存修改';
-            document.getElementById('btnCancel').style.display = 'inline-block';
+            document.getElementById('btnCancel').classList.remove('hide');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -262,7 +263,7 @@
             document.getElementById('parseType').value = 'generic';
             document.getElementById('fetchUrl').value = '';
             document.getElementById('btnAdd').textContent = '添加监控';
-            document.getElementById('btnCancel').style.display = 'none';
+            document.getElementById('btnCancel').classList.add('hide');
         }
 
         async function saveMonitor() {
