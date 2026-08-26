@@ -3,6 +3,7 @@ from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from monitor import VersionMonitorApp, VersionInfo, PageMonitor, PARSE_FUNCTIONS, google_maven_metadata_url
 from email_notifier import send_version_notification
+from log import log
 import atexit
 import signal
 import sys
@@ -27,7 +28,7 @@ def load_state():
             current_versions = db.load_current_versions()
             version_history = db.load_version_history(50)
         except Exception as e:
-            print(f"[加载] 读取数据库失败: {e}")
+            log(f"[加载] 读取数据库失败: {e}")
             current_versions = {}
             version_history = []
 
@@ -50,13 +51,13 @@ def on_new_version(name: str, info: VersionInfo):
             db.save_current_version(name, info.version, info.url, info.detected_at)
             db.add_version_history(name, info.version, info.url, info.detected_at)
         except Exception as e:
-            print(f"[{name}] 写入数据库失败: {e}")
+            log(f"[{name}] 写入数据库失败: {e}")
 
     if old_version:
-        print(f"通知: {name} 更新到 {info.version}")
+        log(f"通知: {name} 更新到 {info.version}")
         send_version_notification(name, old_version, info.version, info.url)
     else:
-        print(f"[{name}] 首次记录版本: {info.version}")
+        log(f"[{name}] 首次记录版本: {info.version}")
 
 
 def is_valid_url(url) -> bool:
@@ -66,11 +67,11 @@ def is_valid_url(url) -> bool:
 def build_monitor_from_row(row):
     url = row.get("url") or ""
     if not is_valid_url(url):
-        print(f"[{row.get('name')}] 跳过：链接格式无效 {url!r}")
+        log(f"[{row.get('name')}] 跳过：链接格式无效 {url!r}")
         return None
     parse_func = PARSE_FUNCTIONS.get(row.get("parse_type"))
     if not parse_func:
-        print(f"[{row.get('name')}] 跳过：未知解析方式 {row.get('parse_type')}")
+        log(f"[{row.get('name')}] 跳过：未知解析方式 {row.get('parse_type')}")
         return None
     fetch_url = row.get("fetch_url") or None
     # google-maven 未指定备用地址时，自动改用 Google 官方元数据源，规避 Cloudflare 拦截
@@ -114,7 +115,7 @@ def init_monitor():
                 url=saved["url"],
                 detected_at=saved.get("time", ""),
             )
-            print(f"[{m.name}] 恢复上次版本: {saved['version']}")
+            log(f"[{m.name}] 恢复上次版本: {saved['version']}")
     monitor.start()
 
 
@@ -265,7 +266,7 @@ def shutdown():
     if _shut_down:
         return
     _shut_down = True
-    print("\n正在关闭...")
+    log("\n正在关闭...")
     if monitor:
         monitor.stop()
 
@@ -275,7 +276,7 @@ if __name__ == "__main__":
     atexit.register(shutdown)
 
     def _signal_handler(signum, frame):
-        print(f"\n收到信号 {signum}，程序即将退出...")
+        log(f"\n收到信号 {signum}，程序即将退出...")
         shutdown()
         sys.exit(0)
 

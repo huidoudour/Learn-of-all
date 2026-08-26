@@ -4,6 +4,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
 from dotenv import load_dotenv
+from log import log
 
 load_dotenv()
 
@@ -28,7 +29,7 @@ def send_version_notification(name: str, old_version: str, new_version: str, url
     all_recipients = receivers + cc_list
 
     if not all([SMTP_SERVER, SMTP_PORT, EMAIL_SENDER, EMAIL_AUTH_CODE, receivers]):
-        print("[邮件] 配置不完整，跳过发送")
+        log("[邮件] 配置不完整，跳过发送")
         return False
 
     subject = f"[版本更新] {name}"
@@ -71,8 +72,8 @@ def send_version_notification(name: str, old_version: str, new_version: str, url
         server.login(EMAIL_SENDER, EMAIL_AUTH_CODE)
         server.sendmail(EMAIL_SENDER, all_recipients, msg.as_string())
         server.quit()
-        print(f"[邮件] 已发送: {name} -> {new_version} (收件人: {len(receivers)}, 抄送: {len(cc_list)})")
+        log(f"[邮件] 已发送: {name} -> {new_version} (收件人: {len(receivers)}, 抄送: {len(cc_list)})")
         return True
     except Exception as e:
-        print(f"[邮件] 发送失败: {e}")
+        log(f"[邮件] 发送失败: {e}")
         return False

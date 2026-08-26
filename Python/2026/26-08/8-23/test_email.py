@@ -1,17 +1,17 @@
 import os
 from dotenv import load_dotenv
 from email_notifier import send_version_notification
+from log import log
 
 load_dotenv()
 
-print("=== 邮箱服务测试 ===")
-print(f"SMTP 服务器: {os.getenv('SMTP_SERVER')}")
-print(f"SMTP 端口: {os.getenv('SMTP_PORT')}")
-print(f"发送邮箱: {os.getenv('EMAIL_SENDER')}")
-print(f"接收邮箱: {os.getenv('EMAIL_RECEIVER')}")
-print(f"抄送邮箱: {os.getenv('EMAIL_CC')}")
-print(f"授权码: {'*' * len(os.getenv('EMAIL_AUTH_CODE', ''))}")
-print()
+log("=== 邮箱服务测试 ===")
+log(f"SMTP 服务器: {os.getenv('SMTP_SERVER')}")
+log(f"SMTP 端口: {os.getenv('SMTP_PORT')}")
+log(f"发送邮箱: {os.getenv('EMAIL_SENDER')}")
+log(f"接收邮箱: {os.getenv('EMAIL_RECEIVER')}")
+log(f"抄送邮箱: {os.getenv('EMAIL_CC')}")
+log(f"授权码: {'*' * len(os.getenv('EMAIL_AUTH_CODE', ''))}")
 
 success = send_version_notification(
     name="邮件通知发送测试",
@@ -21,6 +21,6 @@ success = send_version_notification(
 )
 
 if success:
-    print("\n测试成功！邮件已发送。")
+    log("测试成功！邮件已发送。")
 else:
-    print("\n测试失败，请检查 .env 配置和网络连接。")
+    log("测试失败，请检查 .env 配置和网络连接。")

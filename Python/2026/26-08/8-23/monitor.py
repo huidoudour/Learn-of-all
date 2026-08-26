@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 import requests
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+from log import log
 
 # 部分监控页可能是 XML（如 maven-metadata），避免误导性的“用 HTML 解析 XML”警告刷屏
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -51,7 +52,7 @@ class PageMonitor:
                 last_err = e
 
             wait = 2 * (attempt + 1) + random.uniform(0, 1)
-            print(f"[{self.name}] 第 {attempt + 1}/{retries} 次请求失败({last_err})，{wait:.1f}s 后重试")
+            log(f"[{self.name}] 第 {attempt + 1}/{retries} 次请求失败({last_err})，{wait:.1f}s 后重试")
             if attempt < retries - 1:
                 time.sleep(wait)
         raise last_err if last_err else requests.RequestException("请求失败")
@@ -78,10 +79,10 @@ class PageMonitor:
             response = self._request_with_retry(self.fetch_url, headers)
             result = self.parse_func(response.text, self.url)
             if result is None:
-                print(f"[{self.name}] 解析失败: 未找到版本信息")
+                log(f"[{self.name}] 解析失败: 未找到版本信息")
             return result
         except Exception as e:
-            print(f"[{self.name}] 检查失败: {e}")
+            log(f"[{self.name}] 检查失败: {e}")
             return None
 
 
@@ -128,7 +129,7 @@ def parse_mvnrepository(html: str, url: str) -> Optional[VersionInfo]:
         response.raise_for_status()
         return parse_maven_metadata(response.text, url)
     except Exception as e:
-        print(f"[Compose UI Tooling Preview] 请求失败: {e}")
+        log(f"[Compose UI Tooling Preview] 请求失败: {e}")
 
     return None
 
@@ -269,7 +270,7 @@ def parse_maven_metadata(html: str, url: str) -> Optional[VersionInfo]:
     try:
         root = ET.fromstring(html)
     except ET.ParseError as e:
-        print(f"[{url}] XML 解析失败: {e}")
+        log(f"[{url}] XML 解析失败: {e}")
         return None
 
     def _text(tag: str) -> Optional[str]:
@@ -366,14 +367,14 @@ class VersionMonitorApp:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
-        print("监控已启动")
+        log("监控已启动")
 
     def stop(self):
         self._running = False
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
-        print("监控已停止")
+        log("监控已停止")
 
     def _monitor_loop(self):
         while not self._stop_event.is_set():
@@ -385,11 +386,11 @@ class VersionMonitorApp:
                 current = monitor.check()
                 if current:
                     if monitor.last_version and current.version != monitor.last_version.version:
-                        print(f"[{monitor.name}] 发现新版本: {current.version}")
+                        log(f"[{monitor.name}] 发现新版本: {current.version}")
                         if self.on_new_version:
                             self.on_new_version(monitor.name, current)
                     elif not monitor.last_version:
-                        print(f"[{monitor.name}] 初始版本: {current.version}")
+                        log(f"[{monitor.name}] 初始版本: {current.version}")
                         if self.on_new_version:
                             self.on_new_version(monitor.name, current)
                     monitor.last_version = current
