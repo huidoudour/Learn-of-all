@@ -2,7 +2,7 @@ import os
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from monitor import VersionMonitorApp, VersionInfo, PageMonitor, PARSE_FUNCTIONS, google_maven_metadata_url
-from email_notifier import send_version_notification
+from email_notifier import send_batch_notification
 from log import log
 import atexit
 import signal
@@ -19,6 +19,8 @@ version_history = []
 current_versions = {}
 monitor = None
 state_lock = threading.RLock()
+notify_lock = threading.RLock()
+pending_notifications = []
 
 
 def load_state():
@@ -53,11 +55,31 @@ def on_new_version(name: str, info: VersionInfo):
         except Exception as e:
             log(f"[{name}] 写入数据库失败: {e}")
 
+    # 有旧版本说明是真更新，先加入待发送队列，等本轮所有监控项检查完再合并成一封邮件
     if old_version:
-        log(f"通知: {name} 更新到 {info.version}")
-        send_version_notification(name, old_version, info.version, info.url)
+        with notify_lock:
+            pending_notifications.append(
+                {
+                    "name": name,
+                    "old_version": old_version,
+                    "new_version": info.version,
+                    "url": info.url,
+                }
+            )
+        log(f"通知: {name} 更新到 {info.version} (已加入待发送队列)")
     else:
         log(f"[{name}] 首次记录版本: {info.version}")
+
+
+def flush_pending_notifications():
+    """把缓存中的更新通知合并成一封邮件发出，并清空缓存。"""
+    with notify_lock:
+        if not pending_notifications:
+            return
+        batch = list(pending_notifications)
+        pending_notifications.clear()
+    if send_batch_notification(batch):
+        log(f"[邮件] 已合并发送 {len(batch)} 条更新通知")
 
 
 def is_valid_url(url) -> bool:
@@ -95,7 +117,12 @@ def init_monitor():
         if pm:
             all_monitors.append(pm)
     monitor_interval = int(os.getenv("MONITOR_INTERVAL", "60"))
-    monitor = VersionMonitorApp(interval=monitor_interval, on_new_version=on_new_version, monitors=all_monitors)
+    monitor = VersionMonitorApp(
+        interval=monitor_interval,
+        on_new_version=on_new_version,
+        on_batch_end=flush_pending_notifications,
+        monitors=all_monitors,
+    )
 
     # 清理数据库中已不在监控列表里的孤儿数据（历史与当前版本保持同步）
     active_names = [m.name for m in monitor.monitors]
@@ -254,6 +281,8 @@ def check_now():
             if not m.last_version or result.version != m.last_version.version:
                 on_new_version(m.name, result)
             m.last_version = result
+    # 本轮检查完成：合并同一轮检测到的多个更新为一封邮件
+    flush_pending_notifications()
     return jsonify({"status": "checked"})
 
 
@@ -267,6 +296,7 @@ def shutdown():
         return
     _shut_down = True
     log("\n正在关闭...")
+    flush_pending_notifications()
     if monitor:
         monitor.stop()
 

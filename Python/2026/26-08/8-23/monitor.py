@@ -338,10 +338,12 @@ class VersionMonitorApp:
         self,
         interval: int = 300,
         on_new_version: Optional[Callable] = None,
+        on_batch_end: Optional[Callable] = None,
         monitors: Optional[list] = None,
     ):
         self.interval = interval
         self.on_new_version = on_new_version
+        self.on_batch_end = on_batch_end
         self._monitors_lock = threading.Lock()
         # 监控项由前端 + SQLite 统一管理，不再在此硬编码
         self.monitors = list(monitors) if monitors else []
@@ -394,5 +396,9 @@ class VersionMonitorApp:
                         if self.on_new_version:
                             self.on_new_version(monitor.name, current)
                     monitor.last_version = current
+
+            # 本轮所有监控项检查完毕，触发批量通知：把同一轮检测到的多个更新合并成一封邮件
+            if self.on_batch_end:
+                self.on_batch_end()
 
             self._stop_event.wait(self.interval)
