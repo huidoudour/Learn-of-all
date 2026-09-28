@@ -1,3 +1,4 @@
+import os
 import re
 import time
 import random
@@ -16,6 +17,33 @@ from log import log
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 
+def get_proxies() -> Optional[dict]:
+    """读取环境变量中的代理配置，返回 requests 用的 proxies 字典。
+
+    优先级：PROXY_URL > HTTP_PROXY / HTTPS_PROXY（也兼容小写形式）。
+    未配置时返回 None，requests 将走直连。
+    """
+    proxy_url = os.getenv("PROXY_URL")
+    if proxy_url:
+        return {"http": proxy_url, "https": proxy_url}
+    http_proxy = os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
+    https_proxy = os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
+    proxies = {}
+    if http_proxy:
+        proxies["http"] = http_proxy
+    if https_proxy:
+        proxies["https"] = https_proxy
+    return proxies or None
+
+
+# 采集相关的超时/重试/冷却配置，均可通过环境变量覆盖，便于在弱网环境调优
+CONNECT_TIMEOUT = float(os.getenv("MONITOR_CONNECT_TIMEOUT", "5"))  # 连接超时（秒）
+READ_TIMEOUT = float(os.getenv("MONITOR_READ_TIMEOUT", "30"))       # 读取超时（秒）
+REQUEST_RETRIES = int(os.getenv("MONITOR_RETRIES", "3"))            # 单次采集重试次数
+BASE_COOLDOWN = int(os.getenv("MONITOR_BASE_COOLDOWN", "60"))       # 基础冷却时间（秒）
+MAX_COOLDOWN = int(os.getenv("MONITOR_MAX_COOLDOWN", "600"))        # 冷却时间上限（秒）
+
+
 @dataclass
 class VersionInfo:
     version: str
@@ -30,14 +58,28 @@ class PageMonitor:
         self.parse_func = parse_func
         self.fetch_url = fetch_url or url
         self.last_version: Optional[VersionInfo] = None
+        # 连续失败后的冷却状态，避免反复打不稳定的站点把整轮采集拖慢
+        self._consecutive_failures = 0
+        self._next_check_at = 0.0
 
-    def _request_with_retry(self, url: str, headers: dict, retries: int = 3) -> requests.Response:
-        """带退避重试的 GET 请求，缓解 Cloudflare 等反爬导致的 403/429 间歇性失败。"""
+    def _request_with_retry(self, url: str, headers: dict, retries: int = None) -> requests.Response:
+        """带退避重试的 GET 请求，缓解 Cloudflare 等反爬导致的 403/429 间歇性失败。
+
+        连接与读取超时分开设置：连接超时较短（默认 5s），
+        这样对无法连通的地址能快速判定，避免单个监控项把整轮采集卡住。
+        """
+        retries = retries if retries is not None else REQUEST_RETRIES
         last_err: Optional[Exception] = None
         retry_statuses = (403, 429, 502, 503, 504)
         for attempt in range(retries):
             try:
-                response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+                    allow_redirects=True,
+                    proxies=get_proxies(),
+                )
                 if response.status_code in retry_statuses:
                     # 403/429/5xx 通常是一时性的服务器/反爬拦截，记录后进入重试
                     last_err = requests.HTTPError(f"{response.status_code} {response.reason}", response=response)
@@ -57,7 +99,16 @@ class PageMonitor:
                 time.sleep(wait)
         raise last_err if last_err else requests.RequestException("请求失败")
 
-    def check(self) -> Optional[VersionInfo]:
+    def _cooldown_seconds(self) -> int:
+        """连续失败后的冷却时长，随失败次数递增，默认 60s 起步、上限 10 分钟。"""
+        if self._consecutive_failures <= 0:
+            return 0
+        return min(BASE_COOLDOWN * (2 ** (self._consecutive_failures - 1)), MAX_COOLDOWN)
+
+    def check(self, ignore_cooldown: bool = False) -> Optional[VersionInfo]:
+        # 冷却期内跳过本轮采集，沿用上次已知版本；手动“检查现在”可强制忽略冷却
+        if not ignore_cooldown and time.time() < self._next_check_at:
+            return self.last_version
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -78,11 +129,17 @@ class PageMonitor:
         try:
             response = self._request_with_retry(self.fetch_url, headers)
             result = self.parse_func(response.text, self.url)
+            # 成功则清空失败计数与冷却
+            self._consecutive_failures = 0
+            self._next_check_at = 0.0
             if result is None:
                 log(f"[{self.name}] 解析失败: 未找到版本信息")
             return result
         except Exception as e:
-            log(f"[{self.name}] 检查失败: {e}")
+            self._consecutive_failures += 1
+            cooldown = self._cooldown_seconds()
+            self._next_check_at = time.time() + cooldown
+            log(f"[{self.name}] 检查失败: {e}（连续失败 {self._consecutive_failures} 次，{cooldown:.0f}s 后重试）")
             return None
 
 
@@ -125,7 +182,7 @@ def parse_mvnrepository(html: str, url: str) -> Optional[VersionInfo]:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         }
-        response = requests.get(metadata_url, headers=headers, timeout=30)
+        response = requests.get(metadata_url, headers=headers, timeout=30, proxies=get_proxies())
         response.raise_for_status()
         return parse_maven_metadata(response.text, url)
     except Exception as e:
@@ -382,20 +439,32 @@ class VersionMonitorApp:
         while not self._stop_event.is_set():
             with self._monitors_lock:
                 snapshot = list(self.monitors)
+            checked = 0
+            changed = 0
             for monitor in snapshot:
                 if self._stop_event.is_set():
                     break
                 current = monitor.check()
                 if current:
+                    checked += 1
                     if monitor.last_version and current.version != monitor.last_version.version:
+                        changed += 1
                         log(f"[{monitor.name}] 发现新版本: {current.version}")
                         if self.on_new_version:
                             self.on_new_version(monitor.name, current)
                     elif not monitor.last_version:
+                        changed += 1
                         log(f"[{monitor.name}] 初始版本: {current.version}")
                         if self.on_new_version:
                             self.on_new_version(monitor.name, current)
+                    else:
+                        log(f"[{monitor.name}] 当前版本: {current.version}")
                     monitor.last_version = current
+                else:
+                    log(f"[{monitor.name}] 本轮获取失败/无版本")
+
+            # 每轮心跳：即使所有版本都没变，也让用户清楚看到监控在持续运行
+            log(f"[监控] 本轮检查完成：共 {len(snapshot)} 项，有效 {checked} 项，变更 {changed} 项")
 
             # 本轮所有监控项检查完毕，触发批量通知：把同一轮检测到的多个更新合并成一封邮件
             if self.on_batch_end:

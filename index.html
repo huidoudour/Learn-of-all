@@ -9,7 +9,7 @@
     <title>Huidou - Home</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=20260502">
+    <link rel="stylesheet" href="css/style.css?v=20260928">
 </head>
 <body>
     <div class="container">
@@ -74,19 +74,23 @@
         </div>
 
         <footer>
-            <p>© 2026 Huidou | 用心创造，用爱分享</p>
-            <p>最后更新日期: <span id="currentDate"></span></p>
+            <p>© 2025 huidoudour 的 GitHub Pages | 由 GitHub Pages 托管</p>
+            <p>最后更新日期: 
+                <!-- <span id="currentDate"></span> -->
+                2026-08-01 12:00 UTC+8:00
+            </p>
+            <p>
+                当前日期：
+                <span id="currentDate"></span>
+            </p>
         </footer>
     </div>
 
     <script>
         // 显示当前日期
-        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('zh-CN', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            weekday: 'long'
-        });
+        const now = new Date();
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('currentDate').textContent = now.toLocaleDateString('zh-CN', options);
     </script>
 </body>
 </html>

@@ -2,5 +2,5 @@
 /build
 .vscode
 /.venv
-*.log
+**/*.log
 **.class

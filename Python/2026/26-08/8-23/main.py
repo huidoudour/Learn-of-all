@@ -275,7 +275,7 @@ def check_now():
     with monitor._monitors_lock:
         snapshot = list(monitor.monitors)
     for m in snapshot:
-        result = m.check()
+        result = m.check(ignore_cooldown=True)  # 手动检查应绕过冷却，强制采集
         if result:
             # 统一走 on_new_version：首次仅记录版本，有旧版本才通知
             if not m.last_version or result.version != m.last_version.version:
