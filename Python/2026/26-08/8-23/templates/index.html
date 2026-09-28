@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>版本监控面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .layout {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 220px;
+            flex-shrink: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 12px;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            color: #95a5a6;
+            padding: 8px 12px 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            color: #2c3e50;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            -webkit-user-select: none;
+            user-select: none;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .nav-item:hover {
+            background: #f0f4f8;
+        }
+
+        .nav-item.active {
+            background: #2193b0;
+            color: white;
+        }
+
+        .nav-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* 主内容区 */
+        .content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #2193b0;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #1a7a92;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(33,147,176,0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .status-list {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-item:hover {
+            background: #f8f9fa;
+        }
+
+        .status-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .status-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .status-meta {
+            color: #95a5a6;
+            font-size: 12px;
+        }
+
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            white-space: nowrap;
+        }
+
+        .status-version {
+            display: inline-block;
+            background: #e8f4f8;
+            color: #2193b0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-link {
+            color: #2193b0;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .status-link:hover {
+            text-decoration: underline;
+        }
+
+        .history-section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .history-section h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .history-list {
+            list-style: none;
+        }
+
+        .history-item {
+            padding: 16px;
+            border-bottom: 1px solid #ecf0f1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .history-item:hover {
+            background: #f8f9fa;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-item .info {
+            flex: 1;
+        }
+
+        .history-item .name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+
+        .history-item .version-tag {
+            display: inline-block;
+            background: #e8f4f8;
+            color: #2193b0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+
+        .history-item .time {
+            color: #95a5a6;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #95a5a6;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 管理页 iframe */
+        #adminFrame {
+            width: 100%;
+            height: calc(100vh - 200px);
+            border: none;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        @media (max-width: 768px) {
+            .layout {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                position: static;
+                display: flex;
+                gap: 4px;
+            }
+            .sidebar-title {
+                display: none;
+            }
+            .nav-item {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>版本监控面板</h1>
+            <p>实时监控平台和页面的最新版本变化</p>
+        </header>
+
+        <div class="layout">
+            <!-- 侧边栏 -->
+            <aside class="sidebar">
+                <div class="sidebar-title">导航</div>
+                <button class="nav-item active" data-panel="monitors">
+                    <span class="nav-icon">📋</span> 当前监控
+                </button>
+                <button class="nav-item" data-panel="history">
+                    <span class="nav-icon">🕘</span> 版本记录历史
+                </button>
+                <button class="nav-item" data-panel="admin">
+                    <span class="nav-icon">⚙️</span> 监控管理
+                </button>
+            </aside>
+
+            <!-- 主内容区 -->
+            <main class="content">
+                <!-- 当前监控 -->
+                <section id="panel-monitors">
+                    <div class="controls">
+                        <button id="checkNow">立即检查</button>
+                        <button id="refreshData">刷新数据</button>
+                    </div>
+                    <div class="status-list" id="statusCards">
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            <p>等待首次检查完成...</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 版本记录历史 -->
+                <section id="panel-history" class="hidden">
+                    <div class="history-section">
+                        <h2>更新历史</h2>
+                        <ul class="history-list" id="historyList">
+                            <li class="empty-state">
+                                <p>暂无更新记录</p>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- 监控管理 -->
+                <section id="panel-admin" class="hidden">
+                    <iframe id="adminFrame" src="/admin" title="监控管理"></iframe>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        function switchPanel(panelId) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.panel === panelId);
+            });
+            document.querySelectorAll('.content section').forEach(sec => {
+                sec.classList.toggle('hidden', sec.id !== 'panel-' + panelId);
+            });
+        }
+
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => switchPanel(item.dataset.panel));
+        });
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/versions');
+                const data = await response.json();
+                renderCards(data.current);
+                renderHistory(data.history);
+            } catch (error) {
+                console.error('获取数据失败:', error);
+            }
+        }
+
+        function renderCards(current) {
+            const container = document.getElementById('statusCards');
+            const names = Object.keys(current);
+
+            if (names.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <p>等待首次检查完成...</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = names.map(name => {
+                const item = current[name];
+
+                return `
+                    <div class="status-item">
+                        <div class="status-main">
+                            <div class="status-name">${name}</div>
+                            <div class="status-meta">检测时间: ${item.time}</div>
+                        </div>
+                        <div class="status-right">
+                            <span class="status-version">${item.version}</span>
+                            <a class="status-link" href="${item.url}" target="_blank">查看来源</a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderHistory(history) {
+            const container = document.getElementById('historyList');
+
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <li class="empty-state">
+                        <p>暂无更新记录</p>
+                    </li>
+                `;
+                return;
+            }
+
+            container.innerHTML = history.map(item => `
+                <li class="history-item">
+                    <div class="info">
+                        <div class="name">${item.name}</div>
+                        <div class="time">${item.time}</div>
+                    </div>
+                    <span class="version-tag">${item.version}</span>
+                </li>
+            `).join('');
+        }
+
+        document.getElementById('checkNow').addEventListener('click', async () => {
+            const btn = document.getElementById('checkNow');
+            btn.innerHTML = '<span class="loading"></span> 检查中...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/check-now');
+                const data = await response.json();
+                if (data.status === 'checked') {
+                    await fetchData();
+                }
+            } catch (error) {
+                console.error('检查失败:', error);
+            } finally {
+                btn.innerHTML = '立即检查';
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('refreshData').addEventListener('click', fetchData);
+
+        fetchData();
+        setInterval(fetchData, 10000);
+    </script>
+</body>
+</html>

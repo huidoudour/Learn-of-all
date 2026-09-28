@@ -1,0 +1,8 @@
+oids.txt
+__pycache__/
+.cache/ints.txt
+walk.txt
+.cache/oid.txt
+*.log
+*.csv
+.cache

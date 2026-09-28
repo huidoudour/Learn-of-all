@@ -42,8 +42,8 @@
 
 <a href="https://github.com/huidoudour/Learn-of-all/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=huidoudour/Learn-of-all" />
-</a>
-
+</a><br>
+[![AI Assisted](https://img.shields.io/badge/AI-Assisted-blue.svg)](https://github.com/huidoudour/Learn-of-all)<br>
 [![Star History](https://img.shields.io/badge/Star-History-blue.svg)](StarHistory.md)
 
 #### 联系我
